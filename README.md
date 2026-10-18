@@ -121,7 +121,7 @@ omnirwa/
 Requisitos: [Foundry](https://book.getfoundry.sh/getting-started/installation), Node.js ≥ 20, (opcional) Python 3 para Slither.
 
 ```bash
-git clone --recurse-submodules https://github.com/<usuario>/omnirwa.git
+git clone --recurse-submodules https://github.com/JulianColoma/omnirwa.git
 cd omnirwa
 forge install          # si se clonó sin --recurse-submodules
 forge build
