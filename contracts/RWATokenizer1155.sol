@@ -24,8 +24,10 @@ import {IRWATokenizer} from "./interfaces/IRWATokenizer.sol";
 ///      - Creador del activo: único que puede depositar dividendos de su activo.
 ///      - `assetGovernor[id]`: único que puede ejecutar `setSaleActive` / `recordResolution` sobre `id`.
 ///
-///      ESTADO: ESQUELETO. Las funciones marcadas con `TODO(A)` las implementa el integrante A
-///      siguiendo la sección 6.2 del plan. Al terminar, borrar el error `NotImplemented`.
+///      Dividendos: acumulador por fracción `accDividendPerShare[id]` (escalado por 1e18). Cada cambio de
+///      saldo liquida antes lo devengado con el saldo viejo (`_accrue` dentro de `_update`). Las divisiones
+///      redondean hacia abajo: nunca se paga más de lo depositado y queda un sobrante mínimo en el contrato.
+///      Supuesto: `paymentToken` no cobra comisión por transferencia.
 contract RWATokenizer1155 is ERC1155Supply, AccessControl, Pausable, ReentrancyGuard, IRWATokenizer {
     using SafeERC20 for IERC20;
     using Checkpoints for Checkpoints.Trace208;
@@ -124,8 +126,6 @@ contract RWATokenizer1155 is ERC1155Supply, AccessControl, Pausable, ReentrancyG
 
     // ─────────────────────────────── Errores ───────────────────────────────
 
-    /// @dev TEMPORAL (esqueleto): borrar cuando todo esté implementado.
-    error NotImplemented();
     /// @notice La dirección recibida es la dirección cero.
     error ZeroAddress();
     /// @notice La venta del activo no está activa.
@@ -251,31 +251,48 @@ contract RWATokenizer1155 is ERC1155Supply, AccessControl, Pausable, ReentrancyG
 
     /// @notice El creador deposita ganancias del activo `id` para repartir pro-rata entre los titulares.
     /// @dev Solo el creador del activo. Requiere `approve` previo de `paymentToken`.
+    ///      Se reparte entre el supply actual: quien compre después no cobra este depósito.
     /// @param id Id del activo.
     /// @param amount Monto a repartir.
     function depositDividends(uint256 id, uint256 amount) external nonReentrant whenNotPaused {
-        // TODO(A): NotAssetCreator / NoHolders / DepositTooSmall → acc += amount*PRECISION/supply → transferir.
-        id;
-        amount;
-        revert NotImplemented();
+        // CHECKS
+        if (msg.sender != assets[id].creator) revert NotAssetCreator(id, msg.sender);
+        uint256 supply = totalSupply(id);
+        if (supply == 0) revert NoHolders(id);
+        uint256 increment = amount * PRECISION / supply;
+        if (increment == 0) revert DepositTooSmall(amount);
+
+        // EFFECTS
+        accDividendPerShare[id] += increment;
+        emit DividendsDeposited(id, amount, increment);
+
+        // INTERACTIONS
+        paymentToken.safeTransferFrom(msg.sender, address(this), amount);
     }
 
     /// @notice Retira los dividendos acumulados del activo `id`.
     /// @dev Sin `whenNotPaused` a propósito (D13): siempre se puede retirar lo propio.
+    ///      El saldo pendiente se pone en 0 antes de transferir (CEI).
     /// @param id Id del activo.
     function claimDividends(uint256 id) external nonReentrant {
-        // TODO(A): _accrue → leer _owed → NothingToClaim → poner en 0 ANTES de transferir → safeTransfer.
-        id;
-        revert NotImplemented();
+        // CHECKS + EFFECTS
+        _accrue(id, msg.sender);
+        uint256 amount = _owed[id][msg.sender];
+        if (amount == 0) revert NothingToClaim(id);
+        _owed[id][msg.sender] = 0;
+        emit DividendsClaimed(id, msg.sender, amount);
+
+        // INTERACTIONS
+        paymentToken.safeTransfer(msg.sender, amount);
     }
 
     /// @notice Dividendos que `account` podría retirar hoy del activo `id`.
     /// @param id Id del activo.
     /// @param account Titular.
-    /// @return Monto pendiente (liquidado + no liquidado).
+    /// @return Monto pendiente (liquidado + no liquidado), redondeado hacia abajo.
     function pendingDividends(uint256 id, address account) external view returns (uint256) {
-        // TODO(A): _owed + balanceOf * (acc - paid) / PRECISION.
-        return _owed[id][account];
+        uint256 unsettled = accDividendPerShare[id] - _paidPerShare[id][account];
+        return _owed[id][account] + balanceOf(account, id) * unsettled / PRECISION;
     }
 
     // ─────────────────────────────── Snapshots (IRWATokenizer) ───────────────────────────────
