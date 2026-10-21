@@ -12,10 +12,15 @@ import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 
 /// @title OmniGovernor
 /// @notice Junta de inversores de un activo: voto ponderado con snapshot, quórum 20% y mayoría calificada 2/3
-/// @dev Un Governor por activo. Puede ejecutar sobre el tokenizer solo los ganchos de su activo
-///      (`setSaleActive`, `recordResolution`), porque el tokenizer valida `assetGovernor[id]`
+/// @dev Un Governor por activo. Sobre el tokenizer solo puede ejecutar los ganchos de su activo
+///      (`setSaleActive`, `recordResolution`), porque el tokenizer valida `assetGovernor[id]`. Una propuesta
+///      aprobada puede llamar a cualquier contrato, pero el Governor no tiene otros permisos: solo puede mover lo
+///      que tenga él mismo
+///      Puede recibir ETH y fracciones (lo habilita OZ). Esas fracciones suman al supply y solo se mueven o votan por votación
 ///      Permisos: proponer requiere >= 1 fracción en `clock() - 1`; votar, saldo en el snapshot;
 ///      ejecutar, cualquiera (una vez aprobada)
+///      Los votos y el supply se leen de `AssetVotes`, que mide al cierre del segundo anterior al snapshot:
+///      lo comprado en el bloque de la propuesta no vota
 ///      Solo por votación (`onlyGovernance`): `setVotingDelay`, `setVotingPeriod`, `setProposalThreshold`,
 ///      `updateQuorumNumerator` y `relay` (llamada arbitraria desde el Governor)
 ///      Sin timelock: lo aprobado se ejecuta apenas termina la votación

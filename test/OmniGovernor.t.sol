@@ -9,11 +9,12 @@ import {OmniGovernor} from "../contracts/governance/OmniGovernor.sol";
 import {MockTokenizer} from "./mocks/MockTokenizer.sol";
 
 /// @notice Tests del Governor (integrante B)
-/// @dev Detalles de OZ v5.1 que condicionan los tests:
+/// @dev Detalles de OZ v5.1 y de AssetVotes que condicionan los tests:
 ///      - `propose` lee el poder del proponente en `clock() - 1`
 ///      - el snapshot es el momento de la propuesta (delay 0) y ahí está Pending: se vota desde `snapshot + 1`
 ///      - la votación termina en `snapshot + VOTING_PERIOD`; en `snapshot + VOTING_PERIOD + 1` ya está resuelta
-///      - el mock guarda por timestamp exacto, así que se carga `snapshot - 1` (umbral) y `snapshot` (votos y supply)
+///      - AssetVotes mide en `t` el saldo al cierre de `t - 1`, y el mock guarda por timestamp exacto: se carga
+///        `snapshot - 2` (umbral de propose) y `snapshot - 1` (votos y supply)
 contract OmniGovernorTest is Test {
     uint256 internal constant ID = 1;
     uint32 internal constant VOTING_PERIOD = 600; // 10 minutos
@@ -50,14 +51,14 @@ contract OmniGovernorTest is Test {
     // ───────────────────────── Helpers ─────────────────────────
 
     function _setVotes(address who, uint256 amount) internal {
-        mock.setBalanceAt(who, ID, snapshot - 1, amount); // umbral de propose
-        mock.setBalanceAt(who, ID, snapshot, amount); // peso en el snapshot
+        mock.setBalanceAt(who, ID, snapshot - 2, amount); // umbral de propose
+        mock.setBalanceAt(who, ID, snapshot - 1, amount); // peso en el snapshot
     }
 
     function _setSnapshot(uint256 aliceVotes, uint256 bobVotes, uint256 supply) internal {
         _setVotes(alice, aliceVotes);
         _setVotes(bob, bobVotes);
-        mock.setSupplyAt(ID, snapshot, supply);
+        mock.setSupplyAt(ID, snapshot - 1, supply);
     }
 
     /// @dev Mismo helper que en Demo.s.sol, con el mock como target
@@ -100,7 +101,7 @@ contract OmniGovernorTest is Test {
 
     function test_QuorumIsTwentyPercentOfSupply() public {
         // El numerador del quórum tiene checkpoint desde el deploy (= snapshot): antes de eso vale 0
-        mock.setSupplyAt(ID, snapshot, 800);
+        mock.setSupplyAt(ID, snapshot - 1, 800);
         _startVoting();
         assertEq(governor.quorum(snapshot), 160);
     }
@@ -140,6 +141,29 @@ contract OmniGovernorTest is Test {
 
         assertFalse(mock.saleActive(ID));
         assertEq(uint8(governor.state(proposalId)), uint8(IGovernor.ProposalState.Executed));
+    }
+
+    function test_BuyInProposalBlockDoesNotVote() public {
+        _setSnapshot(500, 0, 500);
+        mock.setBalanceAt(bob, ID, snapshot, 1_000); // bob compra en el mismo bloque que el propose
+        mock.setSupplyAt(ID, snapshot, 1_500);
+        (address[] memory t, uint256[] memory v, bytes[] memory c) = _closeSaleCall();
+        vm.prank(alice);
+        uint256 proposalId = governor.propose(t, v, c, CLOSE_SALE_DESC);
+
+        _startVoting();
+        assertEq(governor.getVotes(bob, snapshot), 0);
+        vm.prank(alice);
+        governor.castVote(proposalId, FOR);
+        vm.prank(bob);
+        governor.castVote(proposalId, AGAINST);
+
+        (uint256 againstVotes, uint256 forVotes,) = governor.proposalVotes(proposalId);
+        assertEq(againstVotes, 0);
+        assertEq(forVotes, 500);
+
+        _endVoting();
+        assertEq(uint8(governor.state(proposalId)), uint8(IGovernor.ProposalState.Succeeded));
     }
 
     // ───────────────────────── Mayoría y quórum ─────────────────────────
@@ -227,7 +251,7 @@ contract OmniGovernorTest is Test {
         uint256 supply = uint256(forVotes) + againstVotes;
         vm.assume(supply > 0);
         _setSnapshot(forVotes, againstVotes, supply);
-        mock.setBalanceAt(carol, ID, snapshot - 1, 1); // carol propone, así alice puede tener 0
+        mock.setBalanceAt(carol, ID, snapshot - 2, 1); // carol propone, así alice puede tener 0
         (address[] memory t, uint256[] memory v, bytes[] memory c) = _closeSaleCall();
         vm.prank(carol);
         uint256 proposalId = governor.propose(t, v, c, CLOSE_SALE_DESC);

@@ -4,11 +4,11 @@ pragma solidity 0.8.24;
 import {IRWATokenizer} from "../../contracts/interfaces/IRWATokenizer.sol";
 
 /// @title MockTokenizer
-/// @notice Implementación trivial de IRWATokenizer para testear la gobernanza sin el tokenizer real.
+/// @notice Implementación trivial de IRWATokenizer para testear la gobernanza sin el tokenizer real
 /// @dev Los saldos "históricos" se cargan a mano con `setBalanceAt` / `setSupplyAt` y se guardan por
 ///      timestamp EXACTO (no busca el checkpoint anterior). Igual que el tokenizer real, las consultas
-///      históricas revierten con `FutureLookup` si `timepoint` no está estrictamente en el pasado.
-///      Los ganchos `setSaleActive` / `recordResolution` solo los puede llamar el governor vinculado.
+///      históricas revierten con `FutureLookup` si `timepoint` no está estrictamente en el pasado
+///      Los ganchos `setSaleActive` / `recordResolution` solo los puede llamar el governor vinculado
 contract MockTokenizer is IRWATokenizer {
     mapping(address account => mapping(uint256 id => uint256)) public currentBalance;
     mapping(address account => mapping(uint256 id => mapping(uint48 t => uint256))) public pastBalance;
