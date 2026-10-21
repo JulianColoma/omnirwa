@@ -9,6 +9,8 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Checkpoints} from "@openzeppelin/contracts/utils/structs/Checkpoints.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import {Time} from "@openzeppelin/contracts/utils/types/Time.sol";
 import {IRWATokenizer} from "./interfaces/IRWATokenizer.sol";
 
 /// @title RWATokenizer1155
@@ -195,12 +197,21 @@ contract RWATokenizer1155 is ERC1155Supply, AccessControl, Pausable, ReentrancyG
         onlyRole(ISSUER_ROLE)
         returns (uint256 id)
     {
-        // TODO(A): validar montos, guardar Asset, incrementar nextAssetId (unchecked) y emitir AssetRegistered.
-        maxFractions;
-        pricePerFraction;
-        docHash;
-        id = 0;
-        revert NotImplemented();
+        if (maxFractions == 0 || pricePerFraction == 0) revert ZeroAmount();
+        id = nextAssetId;
+        // seguro: haría falta registrar 2^256 activos para desbordar
+        unchecked {
+            nextAssetId = id + 1;
+        }
+        assets[id] = Asset({
+            creator: msg.sender,
+            maxFractions: maxFractions,
+            saleActive: true,
+            pricePerFraction: pricePerFraction,
+            soldFractions: 0,
+            docHash: docHash
+        });
+        emit AssetRegistered(id, msg.sender, maxFractions, pricePerFraction, docHash);
     }
 
     /// @notice Compra `amount` fracciones del activo `id` pagando con `paymentToken`.
@@ -209,11 +220,31 @@ contract RWATokenizer1155 is ERC1155Supply, AccessControl, Pausable, ReentrancyG
     /// @param id Id del activo.
     /// @param amount Fracciones a comprar.
     function buyFractions(uint256 id, uint64 amount) external nonReentrant whenNotPaused {
-        // TODO(A): checks (saleActive, amount > 0, disponible) → effects (soldFractions, evento)
-        //          → interactions (safeTransferFrom al creador, _mint). Ver plan §6.2.
-        id;
-        amount;
-        revert NotImplemented();
+        Asset storage a = assets[id];
+        // CHECKS (un id inexistente tiene saleActive == false)
+        if (!a.saleActive) revert SaleNotActive(id);
+        if (amount == 0) revert ZeroAmount();
+        uint64 sold = a.soldFractions;
+        uint64 max = a.maxFractions;
+        // en uint256 para que una cantidad enorme revierta con ExceedsAvailable y no con overflow
+        if (uint256(sold) + amount > max) {
+            // seguro: sold <= max siempre
+            unchecked {
+                revert ExceedsAvailable(id, max - sold);
+            }
+        }
+        uint256 cost = uint256(amount) * a.pricePerFraction;
+
+        // EFFECTS
+        // seguro: sold + amount <= max, que entra en uint64
+        unchecked {
+            a.soldFractions = sold + amount;
+        }
+        emit FractionsPurchased(id, msg.sender, amount, cost);
+
+        // INTERACTIONS
+        paymentToken.safeTransferFrom(msg.sender, a.creator, cost);
+        _mint(msg.sender, id, amount, "");
     }
 
     // ─────────────────────────────── Dividendos ───────────────────────────────
@@ -312,14 +343,52 @@ contract RWATokenizer1155 is ERC1155Supply, AccessControl, Pausable, ReentrancyG
         return super.balanceOf(account, id);
     }
 
-    /// @dev Punto por donde pasa TODO cambio de saldo (mint, burn, transfer).
-    ///      TODO(A): 1) `_accrue` de from/to con saldos VIEJOS; 2) super._update;
-    ///      3) push de checkpoints de saldo (from/to) y de supply (si es mint/burn). Ver plan §6.2.
+    /// @dev Punto por donde pasa TODO cambio de saldo (mint, burn, transfer):
+    ///      1) liquida dividendos de `from` y `to` con los saldos VIEJOS;
+    ///      2) mueve los saldos;
+    ///      3) registra los saldos nuevos (y el supply, si es mint o burn) en el historial.
+    /// @param from Origen (address(0) en mint).
+    /// @param to Destino (address(0) en burn).
+    /// @param ids Ids de los activos.
+    /// @param values Cantidades por id.
     function _update(address from, address to, uint256[] memory ids, uint256[] memory values)
         internal
         override(ERC1155Supply)
     {
+        uint256 len = ids.length;
+        for (uint256 i = 0; i < len;) {
+            if (from != address(0)) _accrue(ids[i], from);
+            if (to != address(0)) _accrue(ids[i], to);
+            unchecked {
+                ++i;
+            }
+        }
+
         super._update(from, to, ids, values);
+
+        uint48 now_ = Time.timestamp();
+        bool supplyChanged = from == address(0) || to == address(0);
+        for (uint256 i = 0; i < len;) {
+            uint256 id = ids[i];
+            if (from != address(0)) _balanceHistory[id][from].push(now_, SafeCast.toUint208(balanceOf(from, id)));
+            if (to != address(0)) _balanceHistory[id][to].push(now_, SafeCast.toUint208(balanceOf(to, id)));
+            if (supplyChanged) _supplyHistory[id].push(now_, SafeCast.toUint208(totalSupply(id)));
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    /// @dev Liquida en `_owed` los dividendos devengados por `account` en `id` con su saldo actual.
+    ///      Redondea hacia abajo: nunca se paga más de lo depositado.
+    /// @param id Id del activo.
+    /// @param account Titular.
+    function _accrue(uint256 id, address account) private {
+        uint256 acc = accDividendPerShare[id];
+        uint256 paid = _paidPerShare[id][account];
+        if (acc == paid) return;
+        _owed[id][account] += balanceOf(account, id) * (acc - paid) / PRECISION;
+        _paidPerShare[id][account] = acc;
     }
 
     /// @dev Lógica de `onlyAssetGovernor` (separada para reducir el tamaño del bytecode).
