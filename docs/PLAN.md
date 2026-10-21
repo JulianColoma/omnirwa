@@ -135,10 +135,10 @@ Esta sección es clave para la presentación: muestra **criterio de diseño**.
 | D3 | Dividendos **pull over push** con acumulador por fracción | Recorrer titulares y transferir a cada uno | *Push* se queda sin gas con muchos titulares, y un receptor que revierte bloquea a todos |
 | D4 | Fracciones **se mintean al comprarse** | Pre-mintear todo al creador | `totalSupply(id)` = lo vendido; los dividendos se reparten solo entre compradores |
 | D5 | ~~Bloquear las fracciones del votante hasta que cierre la votación~~ → **reemplazado por snapshot** | Bloqueo (idea original del Word) | El bloqueo evitaba el doble voto, pero **no evitaba comprar fracciones justo antes de votar** para dar vuelta el resultado. Con snapshot, el peso es el saldo **al crearse la propuesta**: lo comprado después no vota, y lo transferido después de votar tampoco (el receptor tenía 0 en el snapshot). Además, los inversores pueden vender en cualquier momento |
-| D6 | **Mayoría calificada 2/3 + quórum 20%** | Mayoría simple | Alguien con 50%+1 legítimo no decide solo. **No se puede evitar del todo** que un tenedor mayoritario real tenga poder (un tope por billetera se esquiva con varias billeteras, salvo con KYC), pero sí proteger a la minoría. Y como lo recaudado se reparte siempre pro-rata, la mayoría decide pero **no puede quedarse con la parte de los demás** |
+| D6 | **Mayoría calificada 2/3 exacto + quórum 20%** (fracción entera `a favor × 3 >= (a favor + en contra) × 2`, ponderada por fracciones) | Mayoría simple / 2/3 en puntos básicos (`6667` rechaza un 2/3 exacto; `6666` deja pasar un 66,66%) | Alguien con 50%+1 legítimo no decide solo. **No se puede evitar del todo** que un tenedor mayoritario real tenga poder (un tope por billetera se esquiva con varias billeteras, salvo con KYC), pero sí proteger a la minoría. Y como lo recaudado se reparte siempre pro-rata, la mayoría decide pero **no puede quedarse con la parte de los demás** |
 | D7 | **OpenZeppelin Governor** + adaptador `AssetVotes` propio | Gobernanza 100% casera | Código auditado: estados, snapshot, quórum y ejecución on-chain ya resueltos. Hay que adaptarlo porque el Governor es de **un solo token** (`IVotes` no recibe `id`) → **un adaptador y un Governor por activo** |
 | D8 | **Sin delegación** (cada titular vota con su saldo) | Delegación estilo `ERC20Votes` | En `ERC20Votes`, si no te auto-delegás tus votos son 0: error clásico en las demos. Delegación → roadmap |
-| D9 | `votingDelay = 0` | Delay de 1 día (habitual en ejemplos) | El delay abre una ventana para ver la propuesta, comprar y votar. Con 0, solo podría colarse una compra en el mismo bloque (*front-running*) → limitación declarada |
+| D9 | `votingDelay = 0` | Delay de 1 día (habitual en ejemplos) | El delay abre una ventana para ver la propuesta, comprar y votar. Con 0, quedaba la compra en el mismo bloque (*front-running* desde el mempool): **cerrado en `AssetVotes`**, que mide los votos en `t` como el saldo al cierre de `t - 1`, así que lo comprado en el bloque de la propuesta no vota |
 | D10 | El Governor **ejecuta** acciones reales sobre su activo: `setSaleActive(id, bool)` y `recordResolution(id, hash)` | Votación que solo registra un resultado | El Governor ejecuta llamadas; además da una demo visual ("cerramos la venta" → se ejecuta → la venta queda cerrada). Cada Governor solo puede tocar **su** activo |
 | D11 | El USDT de la compra va **directo al creador** | Escrow con devolución si no se vende todo | Simplicidad del MVP; escrow → roadmap |
 | D12 | Metadata del activo en IPFS; on-chain solo un `bytes32 docHash` | Strings on-chain | La consigna pide evitar strings largos (gas) |
@@ -484,6 +484,7 @@ pragma solidity 0.8.24;
 
 import {IERC5805} from "@openzeppelin/contracts/interfaces/IERC5805.sol"; // IVotes + IERC6372 (clock)
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import {Time} from "@openzeppelin/contracts/utils/types/Time.sol";
 import {IRWATokenizer} from "../interfaces/IRWATokenizer.sol";
 
 /// @title AssetVotes
@@ -497,25 +498,37 @@ contract AssetVotes is IERC5805 {
 
     /// @notice La delegación de votos no está soportada.
     error DelegationDisabled();
+    error ZeroAddress();
+    error InvalidAssetId();                                   // 🔒 el id 0 significa "no existe" en el tokenizer
+    error ERC5805FutureLookup(uint256 timepoint, uint48 clock); // misma firma que `Votes` de OZ
 
     constructor(IRWATokenizer tokenizer_, uint256 assetId_) {
+        if (address(tokenizer_) == address(0)) revert ZeroAddress();
+        if (assetId_ == 0) revert InvalidAssetId();
         tokenizer = tokenizer_;
         assetId = assetId_;
     }
 
     /// @notice Reloj por timestamp (los períodos van en segundos).
-    function clock() public view returns (uint48) { return uint48(block.timestamp); }
+    function clock() public view returns (uint48) { return Time.timestamp(); } // 🔒 downcast con SafeCast
     /// @notice Modo de reloj según ERC-6372.
     function CLOCK_MODE() external pure returns (string memory) { return "mode=timestamp"; }
 
     function getVotes(address account) external view returns (uint256) {
         return tokenizer.balanceOf(account, assetId);
     }
+    /// 🔒 Votos en `t` = saldo al cierre de `t - 1`: lo comprado en el bloque de la propuesta no vota (D9).
     function getPastVotes(address account, uint256 timepoint) external view returns (uint256) {
-        return tokenizer.balanceOfAt(account, assetId, SafeCast.toUint48(timepoint));
+        return tokenizer.balanceOfAt(account, assetId, _previousTimepoint(timepoint));
     }
     function getPastTotalSupply(uint256 timepoint) external view returns (uint256) {
-        return tokenizer.totalSupplyAt(assetId, SafeCast.toUint48(timepoint));
+        return tokenizer.totalSupplyAt(assetId, _previousTimepoint(timepoint));
+    }
+
+    function _previousTimepoint(uint256 timepoint) private view returns (uint48) {
+        uint48 currentTimepoint = clock();
+        if (timepoint >= currentTimepoint) revert ERC5805FutureLookup(timepoint, currentTimepoint);
+        return timepoint == 0 ? 0 : SafeCast.toUint48(timepoint - 1);
     }
 
     /// @notice Cada cuenta se "delega" a sí misma, de forma implícita.
@@ -547,8 +560,11 @@ import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 contract OmniGovernor is
     Governor, GovernorSettings, GovernorCountingSimple, GovernorVotes, GovernorVotesQuorumFraction
 {
-    /// @notice Proporción mínima de votos a favor sobre (a favor + en contra), en puntos básicos.
-    uint256 public constant SUPERMAJORITY_BPS = 6_667;
+    /// @notice Mayoría calificada, ponderada por fracciones: a favor / (a favor + en contra) >= 2/3 (exacto).
+    uint256 public constant SUPERMAJORITY_NUMERATOR = 2;
+    uint256 public constant SUPERMAJORITY_DENOMINATOR = 3;
+
+    error ZeroAddress();
 
     /// @param votes Adaptador AssetVotes del activo.
     /// @param name_ Nombre del Governor (ej. "OmniRWA Depto Rosario").
@@ -556,16 +572,23 @@ contract OmniGovernor is
     constructor(IVotes votes, string memory name_, uint32 votingPeriod_)
         Governor(name_)
         GovernorSettings(0, votingPeriod_, 1) // delay 0 s (D9), período configurable, umbral: 1 fracción
-        GovernorVotes(votes)
+        GovernorVotes(_nonZeroVotes(votes))   // 🔒 se valida antes de que QuorumFraction llame a token().clock()
         GovernorVotesQuorumFraction(20)       // 20% del supply en el snapshot
     {}
 
-    /// @dev Reemplaza la mayoría simple por mayoría calificada de 2/3 (D6).
+    /// @dev Reemplaza la mayoría simple por mayoría calificada de 2/3 exacto (D6).
+    ///      Las abstenciones cuentan para el quórum pero no para la proporción.
     function _voteSucceeded(uint256 proposalId)
         internal view override(Governor, GovernorCountingSimple) returns (bool)
     {
         (uint256 againstVotes, uint256 forVotes, ) = proposalVotes(proposalId);
-        return forVotes > 0 && forVotes * 10_000 >= (forVotes + againstVotes) * SUPERMAJORITY_BPS;
+        return forVotes > 0
+            && forVotes * SUPERMAJORITY_DENOMINATOR >= (forVotes + againstVotes) * SUPERMAJORITY_NUMERATOR;
+    }
+
+    function _nonZeroVotes(IVotes votes) private pure returns (IVotes) {
+        if (address(votes) == address(0)) revert ZeroAddress();
+        return votes;
     }
 
     // Overrides obligatorios por herencia múltiple (los genera el Wizard):
@@ -580,7 +603,7 @@ contract OmniGovernor is
 
 1. **Proponer:** `propose(targets, values, calldatas, description)` → devuelve `proposalId`.
    Ejemplo: `targets = [tokenizer]`, `values = [0]`, `calldatas = [abi.encodeCall(RWATokenizer1155.setSaleActive, (1, false))]`.
-2. **Snapshot:** se toma en `momento de la propuesta + votingDelay` (= ahora, porque el delay es 0). Lo comprado después no vota.
+2. **Snapshot:** se toma en `momento de la propuesta + votingDelay` (= ahora, porque el delay es 0). `AssetVotes` mide los votos al cierre del segundo anterior, así que lo comprado en el mismo bloque de la propuesta o después no vota.
 3. **Votar:** `castVote(proposalId, support)`, con `0` = en contra, `1` = a favor, `2` = abstención.
    - ⚠️ El Governor **no revierte** si alguien vota con peso 0: registra el voto y suma 0.
    - ⚠️ El quórum de `GovernorCountingSimple` cuenta **a favor + abstención**, no los votos en contra.
@@ -619,7 +642,7 @@ contract OmniGovernor is
 | Doble voto con la misma cuenta | Lo controla el Governor (`GovernorAlreadyCastVote`) |
 | Votar, transferir a otra billetera y votar de nuevo | Snapshot: el receptor tenía 0 en el snapshot |
 | **Comprar justo antes de votar para dar vuelta el resultado** | Snapshot al crear la propuesta + `votingDelay = 0` |
-| *Front-running* (comprar en el mismo bloque que la propuesta) | Ventana mínima; limitación declarada |
+| *Front-running* (comprar en el mismo bloque que la propuesta) | `AssetVotes` mide los votos al cierre del segundo anterior al snapshot: esa compra pesa 0. Test `test_BuyInProposalBlockDoesNotVote`. Queda el caso de un `propose` que tarda varios bloques en el mempool → limitación declarada (§14) |
 | Tenedor legítimo con 50%+1 | Mayoría 2/3 + quórum 20%; reparto siempre pro-rata. Topes por billetera + KYC → roadmap |
 | Un Governor que toque otro activo | `onlyAssetGovernor(id)`; `setAssetGovernor` se fija una sola vez |
 | Uso de `block.timestamp` | Un validador solo puede correrlo unos segundos y los períodos son de minutos o días → aceptado |
@@ -737,6 +760,7 @@ Varios Governors con factory, escrow con devolución, timelock, delegación, KYC
 - `recordResolution` emite su evento al ejecutarse.
 - Transferir después de votar está permitido y el receptor no suma votos.
 - **B compra después de la propuesta y su peso en el snapshot es 0**: `getVotes(bob, snapshot) == 0` y el recuento no cambia aunque vote.
+- **B compra en el mismo bloque que la propuesta** (*front-running*) y su peso también es 0.
 
 **Casos de error**
 - Proponer sin fracciones → `GovernorInsufficientProposerVotes`.
@@ -867,7 +891,7 @@ El PDF pide subirlo a Drive, pero no detalla el formato → **confirmar en la me
 - Un Governor por activo, desplegado a mano por script (sin factory).
 - Sin delegación de votos.
 - Sin timelock: lo aprobado se ejecuta apenas termina la votación.
-- *Front-running* posible en el mismo bloque que la propuesta.
+- El snapshot excluye lo comprado en el bloque de la propuesta, pero si la transacción del `propose` queda varios bloques pendiente en el mempool, una compra anterior a su inclusión sí vota (mitigación: enviarla con gas suficiente o por RPC privado).
 - Un tenedor legítimo de la mayoría tiene peso real (mitigado con 2/3 + quórum + reparto pro-rata).
 - Las decisiones off-chain (vender el depto) solo quedan registradas (`recordResolution`), no se ejecutan on-chain.
 - Sobrante de redondeo en los dividendos.

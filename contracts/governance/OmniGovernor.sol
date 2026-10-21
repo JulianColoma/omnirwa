@@ -11,13 +11,19 @@ import {
 import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 
 /// @title OmniGovernor
-/// @notice Junta de inversores de UN activo: voto ponderado con snapshot, quórum 20% y mayoría calificada 2/3.
-/// @dev Un Governor por activo (D7). Puede ejecutar sobre el tokenizer solo los ganchos de su activo
-///      (`setSaleActive`, `recordResolution`), porque el tokenizer valida `assetGovernor[id]`.
-///      Permisos: proponer requiere >= 1 fracción en el snapshot; votar, saldo en el snapshot;
-///      ejecutar, cualquiera (una vez aprobada). Los parámetros solo cambian por votación (onlyGovernance).
-///
-///      ESTADO: ESQUELETO. `_voteSucceeded` (TODO(B)) todavía usa mayoría simple.
+/// @notice Junta de inversores de un activo: voto ponderado con snapshot, quórum 20% y mayoría calificada 2/3
+/// @dev Un Governor por activo. Sobre el tokenizer solo puede ejecutar los ganchos de su activo
+///      (`setSaleActive`, `recordResolution`), porque el tokenizer valida `assetGovernor[id]`. Una propuesta
+///      aprobada puede llamar a cualquier contrato, pero el Governor no tiene otros permisos: solo puede mover lo
+///      que tenga él mismo
+///      Puede recibir ETH y fracciones (lo habilita OZ). Esas fracciones suman al supply y solo se mueven o votan por votación
+///      Permisos: proponer requiere >= 1 fracción en `clock() - 1`; votar, saldo en el snapshot;
+///      ejecutar, cualquiera (una vez aprobada)
+///      Los votos y el supply se leen de `AssetVotes`, que mide al cierre del segundo anterior al snapshot:
+///      lo comprado en el bloque de la propuesta no vota
+///      Solo por votación (`onlyGovernance`): `setVotingDelay`, `setVotingPeriod`, `setProposalThreshold`,
+///      `updateQuorumNumerator` y `relay` (llamada arbitraria desde el Governor)
+///      Sin timelock: lo aprobado se ejecuta apenas termina la votación
 contract OmniGovernor is
     Governor,
     GovernorSettings,
@@ -25,35 +31,53 @@ contract OmniGovernor is
     GovernorVotes,
     GovernorVotesQuorumFraction
 {
-    /// @notice Proporción mínima de votos a favor sobre (a favor + en contra), en puntos básicos (2/3).
-    uint256 public constant SUPERMAJORITY_BPS = 6_667;
-    /// @notice Denominador de los puntos básicos.
-    uint256 private constant BPS = 10_000;
-    /// @notice Quórum: porcentaje del supply en el snapshot que debe votar a favor o abstenerse.
+    /// @notice Mayoría calificada, ponderada por fracciones: a favor / (a favor + en contra) >= 2/3
+    uint256 public constant SUPERMAJORITY_NUMERATOR = 2;
+    /// @notice Denominador de la mayoría calificada
+    uint256 public constant SUPERMAJORITY_DENOMINATOR = 3;
+    /// @notice Quórum: porcentaje del supply en el snapshot que debe votar a favor o abstenerse
     uint256 private constant QUORUM_PERCENT = 20;
 
-    /// @notice Despliega el Governor de un activo.
-    /// @param votes Adaptador AssetVotes del activo.
-    /// @param name_ Nombre del Governor (ej. "OmniRWA Depto Rosario").
-    /// @param votingPeriod_ Duración de la votación en segundos.
+    /// @notice La dirección del adaptador de votos es cero
+    error ZeroAddress();
+
+    /// @notice Despliega el Governor de un activo
+    /// @dev `votes` se valida en el argumento de `GovernorVotes`, antes de que el constructor de
+    ///      `GovernorVotesQuorumFraction` llame a `token().clock()`. Con `votingPeriod_ == 0` revierte
+    ///      con `GovernorInvalidVotingPeriod`
+    /// @param votes Adaptador AssetVotes del activo (no puede ser la dirección cero)
+    /// @param name_ Nombre del Governor (ej. "OmniRWA Depto Rosario")
+    /// @param votingPeriod_ Duración de la votación en segundos (> 0)
     constructor(IVotes votes, string memory name_, uint32 votingPeriod_)
         Governor(name_)
-        GovernorSettings(0, votingPeriod_, 1) // delay 0 s (D9), período configurable, umbral: 1 fracción
-        GovernorVotes(votes)
+        GovernorSettings(0, votingPeriod_, 1) // delay 0s, período configurable, umbral: 1 fracción
+        GovernorVotes(_nonZeroVotes(votes))
         GovernorVotesQuorumFraction(QUORUM_PERCENT)
     {}
 
-    /// @dev Mayoría calificada de 2/3 sobre (a favor + en contra) (D6).
-    /// @param proposalId Id de la propuesta.
-    /// @return Si la votación alcanzó la mayoría requerida.
+    /// @dev Mayoría calificada de 2/3 exacto sobre (a favor + en contra)
+    ///      Las abstenciones cuentan para el quórum pero no entran en la proporción. Un 2/3 exacto aprueba
+    ///      `forVotes > 0` evita aprobar sin votos a favor (solo abstenciones, o quórum 0 por redondeo
+    ///      cuando el supply es < 5). Sin overflow posible: los votos están acotados por el supply
+    /// @param proposalId Id de la propuesta
+    /// @return Si la votación alcanzó la mayoría requerida
     function _voteSucceeded(uint256 proposalId)
         internal
         view
         override(Governor, GovernorCountingSimple)
         returns (bool)
     {
-        // TODO(B): forVotes > 0 && forVotes * BPS >= (forVotes + againstVotes) * SUPERMAJORITY_BPS.
-        return super._voteSucceeded(proposalId);
+        (uint256 againstVotes, uint256 forVotes,) = proposalVotes(proposalId);
+        return
+            forVotes > 0 && forVotes * SUPERMAJORITY_DENOMINATOR >= (forVotes + againstVotes) * SUPERMAJORITY_NUMERATOR;
+    }
+
+    /// @dev Valida `votes` antes de que lo use cualquier constructor base
+    /// @param votes Adaptador de votos
+    /// @return El mismo `votes`, si no es la dirección cero
+    function _nonZeroVotes(IVotes votes) private pure returns (IVotes) {
+        if (address(votes) == address(0)) revert ZeroAddress();
+        return votes;
     }
 
     // ───────────── Overrides obligatorios por herencia múltiple ─────────────
