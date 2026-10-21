@@ -2,6 +2,7 @@
 pragma solidity 0.8.24;
 
 import {Test} from "forge-std/Test.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {AssetVotes} from "../contracts/governance/AssetVotes.sol";
 import {IRWATokenizer} from "../contracts/interfaces/IRWATokenizer.sol";
 import {MockTokenizer} from "./mocks/MockTokenizer.sol";
@@ -45,17 +46,42 @@ contract AssetVotesTest is Test {
         new AssetVotes(IRWATokenizer(address(0)), ID);
     }
 
+    function test_RevertWhen_ZeroAssetId() public {
+        vm.expectRevert(AssetVotes.InvalidAssetId.selector);
+        new AssetVotes(mock, 0);
+    }
+
     function test_GetPastVotes() public {
-        vm.skip(true); // TODO(B): implementar getPastVotes con balanceOfAt
         uint48 t = uint48(block.timestamp - 1);
         mock.setBalanceAt(alice, ID, t, 300);
         assertEq(votes.getPastVotes(alice, t), 300);
     }
 
+    function test_GetPastVotes_UnknownAccountIsZero() public {
+        assertEq(votes.getPastVotes(makeAddr("nobody"), block.timestamp - 1), 0);
+    }
+
     function test_GetPastTotalSupply() public {
-        vm.skip(true); // TODO(B): implementar getPastTotalSupply con totalSupplyAt
         uint48 t = uint48(block.timestamp - 1);
         mock.setSupplyAt(ID, t, 800);
         assertEq(votes.getPastTotalSupply(t), 800);
+    }
+
+    function test_RevertWhen_TimepointOverflowsUint48() public {
+        uint256 t = type(uint256).max;
+        bytes memory err = abi.encodeWithSelector(SafeCast.SafeCastOverflowedUintDowncast.selector, 48, t);
+        vm.expectRevert(err);
+        votes.getPastVotes(alice, t);
+        vm.expectRevert(err);
+        votes.getPastTotalSupply(t);
+    }
+
+    function test_RevertWhen_FutureLookup() public {
+        uint48 t = uint48(block.timestamp);
+        bytes memory err = abi.encodeWithSelector(MockTokenizer.FutureLookup.selector, t, t);
+        vm.expectRevert(err);
+        votes.getPastVotes(alice, t);
+        vm.expectRevert(err);
+        votes.getPastTotalSupply(t);
     }
 }
