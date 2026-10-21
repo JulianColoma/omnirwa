@@ -202,7 +202,7 @@ Red: **Sepolia** (chainId 11155111).
 - Se confía en el creador: vínculo legal con el activo y veracidad de las ganancias depositadas.
 - Un Governor por activo, desplegado a mano por script (sin factory).
 - Sin delegación de votos y sin timelock.
-- *Front-running* posible en el mismo bloque que la propuesta.
+- El snapshot excluye lo comprado en el bloque de la propuesta, pero si la transacción del `propose` queda varios bloques pendiente en el mempool, una compra anterior a su inclusión sí vota (mitigación: enviarla con gas suficiente o por RPC privado).
 - Un tenedor mayoritario legítimo tiene peso real (mitigado con 2/3 + quórum + reparto pro-rata).
 - Las decisiones off-chain solo quedan registradas (`recordResolution`).
 - Sobrante de redondeo en los dividendos.
