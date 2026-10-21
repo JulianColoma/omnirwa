@@ -223,6 +223,29 @@ contract OmniGovernorTest is Test {
         assertEq(uint8(governor.state(proposalId)), uint8(IGovernor.ProposalState.Defeated));
     }
 
+    function testFuzz_Supermajority(uint64 forVotes, uint64 againstVotes) public {
+        uint256 supply = uint256(forVotes) + againstVotes;
+        vm.assume(supply > 0);
+        _setSnapshot(forVotes, againstVotes, supply);
+        mock.setBalanceAt(carol, ID, snapshot - 1, 1); // carol propone, así alice puede tener 0
+        (address[] memory t, uint256[] memory v, bytes[] memory c) = _closeSaleCall();
+        vm.prank(carol);
+        uint256 proposalId = governor.propose(t, v, c, CLOSE_SALE_DESC);
+
+        _startVoting();
+        vm.prank(alice);
+        governor.castVote(proposalId, FOR);
+        vm.prank(bob);
+        governor.castVote(proposalId, AGAINST);
+
+        _endVoting();
+        bool quorumReached = forVotes >= supply * 20 / 100;
+        bool supermajority = forVotes > 0 && uint256(forVotes) * 3 >= supply * 2;
+        IGovernor.ProposalState expected =
+            quorumReached && supermajority ? IGovernor.ProposalState.Succeeded : IGovernor.ProposalState.Defeated;
+        assertEq(uint8(governor.state(proposalId)), uint8(expected));
+    }
+
     // ───────────────────────── Errores ─────────────────────────
 
     function test_RevertWhen_ProposeWithoutFractions() public {
