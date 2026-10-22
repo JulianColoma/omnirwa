@@ -1,4 +1,5 @@
-[
+// Generado por scripts/export-abis.mjs. No editar a mano.
+export const OmniGovernorAbi = [
   {
     "type": "constructor",
     "inputs": [
@@ -78,7 +79,20 @@
   },
   {
     "type": "function",
-    "name": "SUPERMAJORITY_BPS",
+    "name": "SUPERMAJORITY_DENOMINATOR",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "SUPERMAJORITY_NUMERATOR",
     "inputs": [],
     "outputs": [
       {
@@ -1590,5 +1604,10 @@
         "internalType": "string"
       }
     ]
+  },
+  {
+    "type": "error",
+    "name": "ZeroAddress",
+    "inputs": []
   }
-]
+] as const;

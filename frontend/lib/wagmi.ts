@@ -1,13 +1,14 @@
 import { http, createConfig } from "wagmi";
-import { sepolia, foundry } from "wagmi/chains";
+import { foundry, sepolia } from "wagmi/chains";
 import { injected } from "wagmi/connectors";
+import { chain } from "./contracts";
 
 export const config = createConfig({
-  chains: [sepolia, foundry],
+  chains: [chain],
   connectors: [injected()],
   transports: {
-    [sepolia.id]: http(process.env.NEXT_PUBLIC_SEPOLIA_RPC_URL || undefined),
-    [foundry.id]: http("http://127.0.0.1:8545"),
+    [foundry.id]: http(process.env.NEXT_PUBLIC_RPC_URL || undefined),
+    [sepolia.id]: http(process.env.NEXT_PUBLIC_RPC_URL || undefined),
   },
   ssr: true,
 });
