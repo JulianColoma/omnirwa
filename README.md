@@ -105,6 +105,23 @@ omnirwa/
 | D13 | `claimDividends` no se pausa | Siempre se puede retirar lo propio |
 | D14 | Reloj por timestamp (ERC-6372) | Períodos en segundos; `vm.warp` en tests |
 
+### Cómo funcionan los dividendos
+
+Patrón de **acumulador por fracción** (el de MasterChef / "dividend tokens"), sin recorrer titulares:
+
+- **Depósito** (`depositDividends`, solo el creador): con `D` USDT y supply `S`, `accDividendPerShare[id] += D × 1e18 / S`.
+- **Cada cuenta** guarda el valor del acumulador en su última liquidación (`paidPerShare`).
+- **Pendiente** (`pendingDividends`): `owed + saldo × (accDividendPerShare − paidPerShare) / 1e18`.
+- **Liquidación en cada cambio de saldo:** `_update` (mint, transfer, burn) llama a `_accrue` de emisor y receptor **con el saldo viejo**, antes de mover las fracciones. Por eso quien compra después de un depósito no lo cobra, y quien transfiere conserva lo devengado hasta ese momento.
+- **Retiro** (`claimDividends`, *pull*): pone `owed` en 0 **antes** de transferir (CEI + `nonReentrant`) y **no se pausa** (D13).
+
+| Ejemplo (demo) | Alice | Bob |
+|---|---|---|
+| Fracciones | 500 | 300 |
+| Depósito de 800 USDT → acumulador `+= 800e6 × 1e18 / 800` | **500 USDT** | **300 USDT** |
+
+**Redondeo:** todas las divisiones redondean hacia abajo, así que **nunca se paga más de lo depositado**; queda un sobrante mínimo (unidades de 1e-6 USDT) en el contrato. Lo cubre el fuzz `testFuzz_DividendsNeverExceedDeposit` (suma ≤ depósito, proporción ±1 unidad). Supuesto: el token de pago no cobra comisión por transferencia.
+
 ## 5. Roles y permisos
 
 | Rol / permiso | Quién | Qué permite |
