@@ -3,7 +3,7 @@
 > Fraccionamiento de activos reales (RWA) con ERC-1155, dividendos *pull over push* y gobernanza on-chain con snapshot, quórum y mayoría calificada.
 > Proyecto Final — Blockchain / Web3 · Stack: **Solidity 0.8.24 · Foundry · OpenZeppelin v5.1 · Next.js + wagmi/viem** · Red: **Sepolia**.
 
-> ⚠️ **Estado: en desarrollo (esqueleto).** Las secciones marcadas con `TODO` se completan antes de la entrega (27/10). El plan detallado está en [docs/PLAN.md](docs/PLAN.md) y el reparto en [CONTRIBUTING.md](CONTRIBUTING.md).
+> ⚠️ **Estado: contratos y tests terminados, falta el deploy en Sepolia.** Las secciones marcadas con `TODO` (direcciones, transacciones y equipo) se completan antes de la entrega (27/10). El plan detallado está en [docs/PLAN.md](docs/PLAN.md) y el reparto en [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
@@ -151,14 +151,24 @@ forge test -vvv
 forge coverage --report summary --no-match-coverage "(script|test|lib)"
 ```
 
-> TODO(B): pegar la captura/tabla de coverage final (> 40% en todas las métricas).
+78 tests (unitarios, fuzz e integración con los contratos reales), todos en verde. Coverage final:
+
+| Archivo | % Líneas | % Statements | % Ramas | % Funciones |
+|---|---|---|---|---|
+| `contracts/RWATokenizer1155.sol` | 100,00% (92/92) | 99,13% (114/115) | 95,00% (19/20) | 100,00% (19/19) |
+| `contracts/governance/AssetVotes.sol` | 100,00% (25/25) | 100,00% (24/24) | 100,00% (5/5) | 100,00% (10/10) |
+| `contracts/governance/OmniGovernor.sol` | 100,00% (17/17) | 100,00% (20/20) | 100,00% (1/1) | 100,00% (7/7) |
+| `contracts/mocks/MockUSDT.sol` | 100,00% (5/5) | 100,00% (2/2) | N/A (0/0) | 100,00% (3/3) |
+| **Total** | **100,00% (139/139)** | **99,38% (160/161)** | **96,15% (25/26)** | **100,00% (39/39)** |
 
 ## 8. Slither
 
 ```bash
-pipx install slither-analyzer
+pipx install slither-analyzer        # o: uv tool install slither-analyzer
 slither .
 ```
+
+Slither llama a `forge`: el primero en el `PATH` tiene que ser el de Foundry (`~/.foundry/bin`).
 
 Tabla de hallazgos y justificaciones: [docs/SLITHER.md](docs/SLITHER.md).
 
