@@ -135,7 +135,7 @@ Patrón de **acumulador por fracción** (el de MasterChef / "dividend tokens"), 
 
 ## 6. Instalación y compilación
 
-Requisitos: [Foundry](https://book.getfoundry.sh/getting-started/installation), Node.js ≥ 20, (opcional) Python 3 para Slither.
+Requisitos: [Foundry](https://book.getfoundry.sh/getting-started/installation), Node.js ≥ 24 (npm 11; con npm 10 `npm ci` rechaza el lockfile), (opcional) Python 3 para Slither.
 
 ```bash
 git clone --recurse-submodules https://github.com/JulianColoma/omnirwa.git
