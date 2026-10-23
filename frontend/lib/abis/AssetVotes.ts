@@ -1,4 +1,5 @@
-[
+// Generado por scripts/export-abis.mjs. No editar a mano.
+export const AssetVotesAbi = [
   {
     "type": "constructor",
     "inputs": [
@@ -256,6 +257,43 @@
   },
   {
     "type": "error",
+    "name": "ERC5805FutureLookup",
+    "inputs": [
+      {
+        "name": "timepoint",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "clock",
+        "type": "uint48",
+        "internalType": "uint48"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidAssetId",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "SafeCastOverflowedUintDowncast",
+    "inputs": [
+      {
+        "name": "bits",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "value",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "VotesExpiredSignature",
     "inputs": [
       {
@@ -270,4 +308,4 @@
     "name": "ZeroAddress",
     "inputs": []
   }
-]
+] as const;

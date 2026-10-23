@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "abis": "node scripts/export-abis.mjs"
+    "abis": "node scripts/export-abis.mjs",
+    "sync": "node scripts/sync-deployment.mjs",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@tanstack/react-query": "5.59.16",
