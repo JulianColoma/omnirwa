@@ -1,4 +1,5 @@
-[
+// Generado por scripts/export-abis.mjs. No editar a mano.
+export const MockUSDTAbi = [
   {
     "type": "constructor",
     "inputs": [
@@ -410,4 +411,4 @@
       }
     ]
   }
-]
+] as const;

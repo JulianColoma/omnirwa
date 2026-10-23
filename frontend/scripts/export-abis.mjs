@@ -1,6 +1,7 @@
-// Copia los ABIs compilados por Foundry (../out) a lib/abis/*.json para el frontend.
+// Copia los ABIs compilados por Foundry (../out) a lib/abis/*.ts como `as const`, para que wagmi/viem
+// infieran los tipos de argumentos y retornos.
 // Uso: desde la raíz `forge build`, luego `cd frontend && npm run abis`.
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
 const contracts = {
@@ -15,6 +16,9 @@ mkdirSync(outDir, { recursive: true });
 
 for (const [name, path] of Object.entries(contracts)) {
   const artifact = JSON.parse(readFileSync(join(process.cwd(), "..", "out", path), "utf8"));
-  writeFileSync(join(outDir, `${name}.json`), JSON.stringify(artifact.abi, null, 2));
-  console.log(`✓ ${name}`);
+  const source = `// Generado por scripts/export-abis.mjs. No editar a mano.\nexport const ${name}Abi = ${JSON.stringify(artifact.abi, null, 2)} as const;\n`;
+  writeFileSync(join(outDir, `${name}.ts`), source);
+  const legacy = join(outDir, `${name}.json`);
+  if (existsSync(legacy)) rmSync(legacy);
+  process.stdout.write(`${name}\n`);
 }

@@ -1,49 +1,106 @@
 "use client";
 
 import { useState } from "react";
-import { useAccount, useWriteContract } from "wagmi";
+import { useWriteContract } from "wagmi";
 import { abis, addresses, ASSET_ID } from "@/lib/contracts";
+import { formatInt, formatUsdt } from "@/lib/format";
+import { useAsset, useCanWrite, usePosition } from "@/lib/useAsset";
+import { useTx } from "@/lib/useTx";
+import { TxStatus } from "./TxStatus";
+
+const MAX_UINT64 = 2n ** 64n - 1n;
+
+function parseAmount(value: string): bigint | undefined {
+  if (!/^\d+$/.test(value)) return undefined;
+  const amount = BigInt(value);
+  return amount > 0n && amount <= MAX_UINT64 ? amount : undefined;
+}
 
 /**
- * Compra de fracciones: 1) approve de USDT al tokenizer, 2) buyFractions.
- * TODO(C): leer el precio de `assets(id)` para calcular el approve exacto, esperar el recibo
- *          del approve antes de comprar (useWaitForTransactionReceipt) y mostrar el link a Etherscan.
+ * Compra de fracciones. Si el allowance no alcanza, primero aprueba el costo exacto y espera el recibo;
+ * después llama a `buyFractions`.
  */
 export function BuyFractions() {
-  const { isConnected } = useAccount();
-  const [amount, setAmount] = useState("10");
-  const { writeContract, data: hash, isPending, error } = useWriteContract();
+  const { asset, paused } = useAsset();
+  const { usdtBalance, allowance } = usePosition();
+  const { canWrite, gate } = useCanWrite();
+  const { writeContractAsync } = useWriteContract();
+  const tx = useTx();
+  const [input, setInput] = useState("10");
 
-  const approve = () =>
-    writeContract({
-      address: addresses.usdt!,
-      abi: abis.usdt,
-      functionName: "approve",
-      args: [addresses.tokenizer!, BigInt(2) ** BigInt(256) - BigInt(1)], // TODO(C): approve exacto
-    });
+  if (!asset) return null;
+
+  const amount = parseAmount(input);
+  const remaining = asset.maxFractions - asset.soldFractions;
+  const cost = amount !== undefined ? amount * asset.pricePerFraction : 0n;
+  const needsApproval = allowance !== undefined && allowance < cost;
+  const open = asset.saleActive && !paused;
+
+  let problem: string | undefined;
+  if (!open) problem = paused ? "Las compras están pausadas." : "La venta está cerrada.";
+  else if (input !== "" && amount === undefined) problem = "Ingresá una cantidad entera mayor a cero.";
+  else if (amount !== undefined && amount > remaining) problem = `Solo quedan ${formatInt(remaining)} fracciones.`;
+  else if (amount !== undefined && usdtBalance !== undefined && usdtBalance < cost) problem = "No tenés USDT suficiente.";
 
   const buy = () =>
-    writeContract({
-      address: addresses.tokenizer!,
-      abi: abis.tokenizer,
-      functionName: "buyFractions",
-      args: [ASSET_ID, BigInt(amount)],
+    amount !== undefined &&
+    tx.run(async (step) => {
+      if (needsApproval) {
+        await step("aprobación de USDT", () =>
+          writeContractAsync({
+            address: addresses.usdt!,
+            abi: abis.usdt,
+            functionName: "approve",
+            args: [addresses.tokenizer!, cost],
+          }),
+        );
+      }
+      await step(`compra de ${formatInt(amount)} fracciones`, () =>
+        writeContractAsync({
+          address: addresses.tokenizer!,
+          abi: abis.tokenizer,
+          functionName: "buyFractions",
+          args: [ASSET_ID, amount],
+        }),
+      );
     });
 
   return (
-    <section className="card">
-      <h2>Comprar fracciones</h2>
-      <div className="row">
-        <input type="number" min="1" value={amount} onChange={(e) => setAmount(e.target.value)} />
-        <button disabled={!isConnected || isPending} onClick={approve}>
-          1. Aprobar USDT
-        </button>
-        <button disabled={!isConnected || isPending} onClick={buy}>
-          2. Comprar
-        </button>
+    <section className="panel">
+      <h2>Comprar</h2>
+      <label className="field">
+        <span>Fracciones</span>
+        <input
+          inputMode="numeric"
+          value={input}
+          onChange={(e) => {
+            setInput(e.target.value.replace(/\D/g, ""));
+            tx.reset();
+          }}
+          disabled={!open}
+        />
+      </label>
+      <div className="line">
+        <span>Total</span>
+        <span className="num">{formatUsdt(cost)} USDT</span>
       </div>
-      {hash && <p className="muted">Tx: {hash}</p>}
-      {error && <p className="muted">Error: {error.message.split("\n")[0]}</p>}
+      <div className="line muted">
+        <span>Tu saldo</span>
+        <span className="num">{usdtBalance !== undefined ? `${formatUsdt(usdtBalance)} USDT` : "—"}</span>
+      </div>
+      <button
+        className="button"
+        disabled={!canWrite || !open || amount === undefined || Boolean(problem) || tx.busy}
+        onClick={buy}
+      >
+        {needsApproval ? "Aprobar y comprar" : "Comprar"}
+      </button>
+      {needsApproval && !problem && (
+        <p className="hint">Se firman dos transacciones: la aprobación del monto exacto y la compra.</p>
+      )}
+      {problem && <p className="hint">{problem}</p>}
+      {gate && <p className="hint">{gate}</p>}
+      <TxStatus state={tx.state} />
     </section>
   );
 }

@@ -24,3 +24,5 @@ frontend/next-env.d.ts
 .vscode/
 .idea/
 slither-report.json
+deployments/31337.json
+frontend/tsconfig.tsbuildinfo

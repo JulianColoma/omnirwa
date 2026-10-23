@@ -3,7 +3,7 @@
 > Fraccionamiento de activos reales (RWA) con ERC-1155, dividendos *pull over push* y gobernanza on-chain con snapshot, quórum y mayoría calificada.
 > Proyecto Final — Blockchain / Web3 · Stack: **Solidity 0.8.24 · Foundry · OpenZeppelin v5.1 · Next.js + wagmi/viem** · Red: **Sepolia**.
 
-> ⚠️ **Estado: en desarrollo (esqueleto).** Las secciones marcadas con `TODO` se completan antes de la entrega (27/10). El plan detallado está en [docs/PLAN.md](docs/PLAN.md) y el reparto en [CONTRIBUTING.md](CONTRIBUTING.md).
+> Las secciones marcadas con `TODO` (direcciones y transacciones en Sepolia) se completan con el deploy final. El plan detallado está en [docs/PLAN.md](docs/PLAN.md) y el reparto en [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
@@ -164,6 +164,8 @@ Tabla de hallazgos y justificaciones: [docs/SLITHER.md](docs/SLITHER.md).
 
 ## 9. Uso: deploy, demo y frontend
 
+> Guía completa paso a paso (terminal, MetaMask, anvil, Sepolia y guion de la demo): **[DEMO.md](DEMO.md)**.
+
 ### Deploy en Sepolia
 
 ```bash
@@ -177,17 +179,55 @@ Las direcciones quedan en `deployments/11155111.json`.
 
 ### Demo por scripts
 
-Cada paso lo firma su actor (`creator`, `investorA`, `investorB`). Ver los comandos en la cabecera de [script/Demo.s.sol](script/Demo.s.sol).
+Cada paso lo firma su actor (`creator`, `investorA`, `investorB`, importados con `cast wallet import`). El guion completo está en la cabecera de [script/Demo.s.sol](script/Demo.s.sol); los votos se emiten por propuesta sin copiar el id (`voteCloseSale(uint8)`, `voteResolution(uint8)`) y `status()` imprime el estado del activo y de las dos propuestas.
+
+```bash
+forge script script/Demo.s.sol --sig "register()"            --rpc-url sepolia --account creator   --broadcast
+forge script script/Demo.s.sol --sig "buy(uint64)" 500       --rpc-url sepolia --account investorA --broadcast
+forge script script/Demo.s.sol --sig "proposeCloseSale()"    --rpc-url sepolia --account investorA --broadcast
+forge script script/Demo.s.sol --sig "voteCloseSale(uint8)" 1 --rpc-url sepolia --account investorA --broadcast
+forge script script/Demo.s.sol --sig "status()"              --rpc-url sepolia
+```
 
 ### Frontend
 
+Next.js 14 + wagmi v2 + viem. Una sola página con todo el flujo:
+
+- **Activo:** avance de la venta, precio, recaudado, emisor y hash del legajo.
+- **Comprar:** calcula el costo, aprueba **el monto exacto** solo si el allowance no alcanza, espera el recibo y recién ahí compra.
+- **Tu posición:** fracciones, participación, saldo de USDT, dividendos pendientes y retiro (*pull*).
+- **Emisor:** si la cuenta tiene `ISSUER_ROLE` y el activo no existe, lo registra; si es el creador, deposita dividendos (approve + depósito).
+- **Junta de inversores:** lista las propuestas a partir de los eventos `ProposalCreated`, muestra votos, mayoría 2/3, quórum, cuenta regresiva (con la hora de la cadena) y el poder de voto de la cuenta en el snapshot. Permite crear propuestas (abrir/cerrar la venta o registrar una resolución), votar y ejecutar.
+- **Actividad:** últimos eventos del activo con link a cada transacción en Etherscan.
+
+Los reverts se decodifican con los custom errors de los contratos (`SaleNotActive`, `GovernorAlreadyCastVote`, etc.) y se muestran en castellano.
+
 ```bash
+forge build
 cd frontend
-cp .env.example .env.local   # pegar las direcciones desplegadas
 npm install
-npm run abis                 # copia los ABIs desde ../out (correr forge build antes)
+npm run abis                 # genera lib/abis/*.ts desde ../out
+npm run sync                 # copia direcciones y bloque inicial de ../deployments/11155111.json a .env.local
 npm run dev                  # http://localhost:3000
 ```
+
+La lectura de eventos usa `eth_getLogs` desde el bloque del deploy; si el RPC limita el rango, el frontend lo parte en tramos automáticamente. Para Sepolia conviene configurar `NEXT_PUBLIC_RPC_URL` (ver `frontend/.env.example`).
+
+### Entorno local (anvil)
+
+Para probar todo sin testnet. Las cuentas de anvil están desbloqueadas, así que no hace falta ninguna clave:
+
+```bash
+anvil                                            # terminal 1
+# terminal 2: cuentas 0 = deployer, 1 = creador, 2 = inversor A, 3 = inversor B
+export CREATOR_ADDRESS=0x70997970C51812dc3A010C7d01b50e0d17dc79C8
+export INVESTOR_A_ADDRESS=0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC
+export INVESTOR_B_ADDRESS=0x90F79bf6EB2c4f870365E785982E1f101E93b906
+forge script script/Deploy.s.sol --rpc-url http://127.0.0.1:8545 --broadcast   --unlocked --sender 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+cd frontend && npm run sync -- 31337 && npm run dev
+```
+
+En MetaMask: agregar la red `http://127.0.0.1:8545` (chainId 31337) e importar las cuentas de anvil que se quieran usar. Para cerrar una votación sin esperar 10 minutos: `cast rpc evm_increaseTime 600 && cast rpc evm_mine`.
 
 ## 10. Red y contratos desplegados
 
