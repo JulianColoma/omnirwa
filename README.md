@@ -3,7 +3,7 @@
 > Fraccionamiento de activos reales (RWA) con ERC-1155, dividendos *pull over push* y gobernanza on-chain con snapshot, quórum y mayoría calificada.
 > Proyecto Final — Blockchain / Web3 · Stack: **Solidity 0.8.24 · Foundry · OpenZeppelin v5.1 · Next.js + wagmi/viem** · Red: **Sepolia**.
 
-> Las secciones marcadas con `TODO` (direcciones y transacciones en Sepolia) se completan con el deploy final. El plan detallado está en [docs/PLAN.md](docs/PLAN.md) y el reparto en [CONTRIBUTING.md](CONTRIBUTING.md).
+> **Estado:** contratos, tests (78, coverage > 95% en todas las métricas), Slither, scripts de deploy/demo y frontend terminados y probados en local (anvil). **Falta:** deploy y verificación en Sepolia, correr la demo on-chain y completar las secciones marcadas con `TODO` (direcciones y transacciones, [§10](#10-red-y-contratos-desplegados) y [§11](#11-transacciones-del-flujo-principal)). Entrega: 27/10. El plan detallado está en [docs/PLAN.md](docs/PLAN.md) y el reparto en [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
@@ -135,7 +135,7 @@ Patrón de **acumulador por fracción** (el de MasterChef / "dividend tokens"), 
 
 ## 6. Instalación y compilación
 
-Requisitos: [Foundry](https://book.getfoundry.sh/getting-started/installation), Node.js ≥ 20, (opcional) Python 3 para Slither.
+Requisitos: [Foundry](https://book.getfoundry.sh/getting-started/installation), Node.js ≥ 24 (npm 11; con npm 10 `npm ci` rechaza el lockfile), (opcional) Python 3 para Slither.
 
 ```bash
 git clone --recurse-submodules https://github.com/JulianColoma/omnirwa.git
@@ -151,16 +151,35 @@ forge test -vvv
 forge coverage --report summary --no-match-coverage "(script|test|lib)"
 ```
 
-> TODO(B): pegar la captura/tabla de coverage final (> 40% en todas las métricas).
+78 tests (unitarios, fuzz e integración con los contratos reales), todos en verde. Coverage final:
+
+| Archivo | % Líneas | % Statements | % Ramas | % Funciones |
+|---|---|---|---|---|
+| `contracts/RWATokenizer1155.sol` | 100,00% (92/92) | 99,13% (114/115) | 95,00% (19/20) | 100,00% (19/19) |
+| `contracts/governance/AssetVotes.sol` | 100,00% (25/25) | 100,00% (24/24) | 100,00% (5/5) | 100,00% (10/10) |
+| `contracts/governance/OmniGovernor.sol` | 100,00% (17/17) | 100,00% (20/20) | 100,00% (1/1) | 100,00% (7/7) |
+| `contracts/mocks/MockUSDT.sol` | 100,00% (5/5) | 100,00% (2/2) | N/A (0/0) | 100,00% (3/3) |
+| **Total** | **100,00% (139/139)** | **99,38% (160/161)** | **96,15% (25/26)** | **100,00% (39/39)** |
 
 ## 8. Slither
 
 ```bash
-pipx install slither-analyzer
+pipx install slither-analyzer        # o: uv tool install slither-analyzer
 slither .
 ```
 
-Tabla de hallazgos y justificaciones: [docs/SLITHER.md](docs/SLITHER.md).
+Slither llama a `forge`: el primero en el `PATH` tiene que ser el de Foundry (`~/.foundry/bin`).
+
+Slither 0.11.6 sobre el código final: **7 resultados en 4 detectores, ninguno de severidad alta**.
+
+| Detector | Impacto | Contrato / función | Estado | Justificación |
+|---|---|---|---|---|
+| `unused-return` (×3) | Medium | `RWATokenizer1155._update` (`Checkpoints.push`) | Aceptado | `push` devuelve el saldo anterior y el nuevo, que no se necesitan. |
+| `timestamp` (×2) | Low | `RWATokenizer1155.balanceOfAt` / `totalSupplyAt` | Aceptado | Solo rechaza consultas a futuro (`FutureLookup`); un validador mueve el timestamp segundos y las votaciones duran minutos o días. |
+| `naming-convention` | Informational | `AssetVotes.CLOCK_MODE()` | Falso positivo | El nombre lo exige ERC-6372. |
+| `unimplemented-functions` | Informational | `RWATokenizer1155` / `IRWATokenizer.balanceOf` | Falso positivo | Implementada con `override(ERC1155, IRWATokenizer)`. |
+
+No aparecen `reentrancy-*` (`nonReentrant` + CEI) ni `divide-before-multiply`. Detalle completo: [docs/SLITHER.md](docs/SLITHER.md).
 
 ## 9. Uso: deploy, demo y frontend
 
@@ -288,6 +307,6 @@ Red: **Sepolia** (chainId 11155111).
 
 | Integrante | Rol | GitHub |
 |---|---|---|
-| TODO | A — Tokenizer y dividendos | @TODO |
-| TODO | B — Gobernanza y calidad | @TODO |
-| TODO | C — Integración, frontend y entrega | @TODO |
+| Julián Valentín Coloma Visconti | A — Tokenizer y dividendos | [@JulianColoma](https://github.com/JulianColoma) |
+| Sofia Goszko | B — Gobernanza, tests de integración, coverage y Slither | [@SofiaGoszko](https://github.com/sofiagoszko) |
+| Nahuel Hernandez Ulanio | C — Scripts, frontend y entrega | [@NahueelHernandezUlanio](https://github.com/NahueelHernandezUlanio) |
