@@ -12,7 +12,7 @@ export type TxState =
   | { status: "idle" }
   | { status: "signing"; label: string }
   | { status: "pending"; label: string; hash: Hash }
-  | { status: "success"; label: string; hash: Hash }
+  | { status: "success"; label: string; hash: Hash; fee: bigint }
   | { status: "error"; message: string; hash?: Hash };
 
 /** Tarifas EIP-1559 que se pasan a la billetera junto con cada transacción. */
@@ -58,7 +58,7 @@ export function useTx() {
         const receipt = await waitForTransactionReceipt(config, { hash });
         if (receipt.status !== "success") throw new Error("La transacción revirtió.");
         await queryClient.invalidateQueries();
-        setState({ status: "success", label, hash });
+        setState({ status: "success", label, hash, fee: receipt.gasUsed * receipt.effectiveGasPrice });
         return receipt;
       };
       try {
