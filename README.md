@@ -235,10 +235,10 @@ Red: **Sepolia** (chainId 11155111).
 
 | Contrato | Dirección | Código verificado |
 |---|---|---|
-| MockUSDT | `TODO` | `https://sepolia.etherscan.io/address/TODO#code` |
-| RWATokenizer1155 | `TODO` | `https://sepolia.etherscan.io/address/TODO#code` |
-| AssetVotes | `TODO` | `https://sepolia.etherscan.io/address/TODO#code` |
-| OmniGovernor | `TODO` | `https://sepolia.etherscan.io/address/TODO#code` |
+| MockUSDT | `0x470d4dbeD74ADB07ddB913f6809d23F354c24f9B` | [Etherscan](https://sepolia.etherscan.io/address/0x470d4dbeD74ADB07ddB913f6809d23F354c24f9B#code) |
+| RWATokenizer1155 | `0x6010Bc1953f0c158A66C7d2a2498149De7E5879C` | [Etherscan](https://sepolia.etherscan.io/address/0x6010Bc1953f0c158A66C7d2a2498149De7E5879C#code) |
+| AssetVotes | `0x69460822567B1078d96b71aC5c8D16685aED32c0` | [Etherscan](https://sepolia.etherscan.io/address/0x69460822567B1078d96b71aC5c8D16685aED32c0#code) |
+| OmniGovernor | `0x95a0EDEf0f720aAd42e425C5d131751AA9045205` | [Etherscan](https://sepolia.etherscan.io/address/0x95a0EDEf0f720aAd42e425C5d131751AA9045205#code) |
 
 ## 11. Transacciones del flujo principal
 
