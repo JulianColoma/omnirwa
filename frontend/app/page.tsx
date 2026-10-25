@@ -6,6 +6,7 @@ import { IssuerPanel } from "@/components/IssuerPanel";
 import { Governance } from "@/components/Governance";
 import { Activity } from "@/components/Activity";
 import { Contracts } from "@/components/Contracts";
+import { Tabs } from "@/components/Tabs";
 import { isConfigured } from "@/lib/contracts";
 
 export default function Home() {
@@ -19,13 +20,30 @@ export default function Home() {
       {isConfigured ? (
         <>
           <AssetInfo />
-          <div className="columns">
-            <BuyFractions />
-            <Dividends />
-          </div>
-          <IssuerPanel />
-          <Governance />
-          <Activity />
+          <Tabs
+            tabs={[
+              {
+                id: "invertir",
+                label: "Invertir",
+                content: (
+                  <>
+                    <div className="columns">
+                      <BuyFractions />
+                      <Dividends />
+                    </div>
+                    <IssuerPanel />
+                  </>
+                ),
+              },
+              {
+                id: "gobernanza",
+                label: "Gobernanza",
+                content: <Governance />,
+                empty: "La junta de inversores se habilita cuando el activo esté registrado.",
+              },
+              { id: "actividad", label: "Actividad", content: <Activity /> },
+            ]}
+          />
         </>
       ) : (
         <section className="hero">
