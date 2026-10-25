@@ -29,6 +29,7 @@ contract Demo is Script {
     uint64 internal constant MAX_FRACTIONS = 1_000;
     uint128 internal constant PRICE = 10e6;
     bytes32 internal constant DOC_HASH = keccak256("ipfs://depto-rosario");
+    bytes32 internal constant NAME = "Depto Rosario";
     string internal constant CLOSE_SALE_DESC = "Propuesta 1: cerrar la venta del Depto Rosario";
     string internal constant RESOLUTION_DESC = "Propuesta 2: vender el Depto Rosario a 120.000 USDT";
     bytes32 internal constant RESOLUTION_HASH = keccak256("ipfs://acta-venta-depto-rosario-120000");
@@ -50,13 +51,13 @@ contract Demo is Script {
     function register() external {
         _load();
         vm.broadcast();
-        uint256 id = tokenizer.registerAsset(MAX_FRACTIONS, PRICE, DOC_HASH);
+        uint256 id = tokenizer.registerAsset(MAX_FRACTIONS, PRICE, DOC_HASH, NAME);
         console2.log("Asset id", id);
     }
 
     function buy(uint64 amount) external {
         _load();
-        (,,, uint128 price,,) = tokenizer.assets(ASSET_ID);
+        (,,, uint128 price,,,) = tokenizer.assets(ASSET_ID);
         vm.startBroadcast();
         usdt.approve(address(tokenizer), uint256(amount) * price);
         tokenizer.buyFractions(ASSET_ID, amount);
@@ -129,8 +130,9 @@ contract Demo is Script {
     /// @dev Imprime el estado del activo y de las dos propuestas de la demo (no envía transacciones).
     function status() external {
         _load();
-        (address creator, uint64 maxFractions, bool saleActive, uint128 price, uint64 sold,) =
+        (address creator, uint64 maxFractions, bool saleActive, uint128 price, uint64 sold,, bytes32 name) =
             tokenizer.assets(ASSET_ID);
+        console2.log("Name             ", string(abi.encodePacked(name)));
         console2.log("Creator          ", creator);
         console2.log("Sold / max       ", sold, maxFractions);
         console2.log("Price (USDT 1e6) ", price);
