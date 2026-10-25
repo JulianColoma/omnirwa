@@ -28,7 +28,7 @@ Los comandos están para **PowerShell** (Windows). Donde cambia la sintaxis en B
 | Herramienta | Para qué | Cómo verificar |
 |---|---|---|
 | [Foundry](https://book.getfoundry.sh/getting-started/installation) (`forge`, `cast`, `anvil`) | Compilar, testear, deployar y correr la blockchain local | `forge --version` |
-| [Node.js](https://nodejs.org) ≥ 20 | Frontend | `node --version` |
+| [Node.js](https://nodejs.org) ≥ 24 | Frontend | `node --version` |
 | Git | Clonar el repo con submódulos | `git --version` |
 | Chrome o Edge + [MetaMask](https://metamask.io/download) | Firmar transacciones desde el frontend | Ícono del zorro en la barra |
 
