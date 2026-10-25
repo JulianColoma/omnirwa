@@ -9,7 +9,9 @@ import {OmniGovernor} from "../contracts/governance/OmniGovernor.sol";
 
 /// @notice Despliega los 4 contratos, asigna roles, fondea a los inversores y vincula el Governor del activo 1.
 /// @dev Uso (Sepolia, con keystore cifrado — nunca private keys en .env):
-///      forge script script/Deploy.s.sol --rpc-url sepolia --account deployer --broadcast --verify
+///      forge script script/Deploy.s.sol --rpc-url sepolia --account deployer --broadcast --verify --skip-simulation --slow
+///      (--skip-simulation: el gas lo estima el nodo; la simulación local usa evm_version = cancun y subestima
+///      la creación de contratos en Sepolia desde Glamsterdam. --slow: cada tx espera a la anterior.)
 ///      Uso local (anvil, cuentas desbloqueadas):
 ///      forge script script/Deploy.s.sol --rpc-url http://127.0.0.1:8545 --unlocked --sender <cuenta 0> --broadcast
 ///      Variables: CREATOR_ADDRESS, INVESTOR_A_ADDRESS, INVESTOR_B_ADDRESS, TOKEN_URI (ver .env.example).
@@ -37,7 +39,8 @@ contract Deploy is Script {
         uint256 startBlock = block.number;
 
         vm.startBroadcast();
-        address deployer = msg.sender;
+        // la cuenta que firma (--account o --sender); msg.sender del script no siempre coincide
+        (, address deployer,) = vm.readCallers();
 
         // 1) Token de pago y tokenizer
         MockUSDT usdt = new MockUSDT(deployer);

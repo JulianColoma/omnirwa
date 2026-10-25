@@ -9,7 +9,7 @@ Hay dos caminos:
 
 Los comandos están para **PowerShell** (Windows). Donde cambia la sintaxis en Bash (Git Bash, macOS, Linux) se indica aparte.
 
----
+---------------
 
 ## Índice
 
@@ -96,6 +96,25 @@ Tiene que terminar con `ONCHAIN EXECUTION COMPLETE & SUCCESSFUL`. El script:
 
 En anvil no hace falta definir variables de entorno: por defecto toma las cuentas (1), (2) y (3) de la tabla.
 
+#### Opción: usar tus propias cuentas de MetaMask
+
+En lugar de importar las claves de anvil, se pueden usar 3 cuentas que ya tengas en MetaMask (Creador, Inversor A e Inversor B). Es más simple y no hace falta copiar ninguna clave privada. Antes del deploy, en la terminal 2:
+
+```powershell
+$env:CREATOR_ADDRESS="0x..."      # dirección de tu cuenta Creador
+$env:INVESTOR_A_ADDRESS="0x..."
+$env:INVESTOR_B_ADDRESS="0x..."
+
+# cargarles 10.000 ETH de anvil a cada una para pagar el gas
+cast rpc anvil_setBalance $env:CREATOR_ADDRESS 0x21e19e0c9bab2400000
+cast rpc anvil_setBalance $env:INVESTOR_A_ADDRESS 0x21e19e0c9bab2400000
+cast rpc anvil_setBalance $env:INVESTOR_B_ADDRESS 0x21e19e0c9bab2400000
+```
+
+En Bash: `export CREATOR_ADDRESS=0x...` y `cast rpc anvil_setBalance $CREATOR_ADDRESS 0x21e19e0c9bab2400000`.
+
+Después correr el deploy de arriba en la **misma terminal** (las variables duran mientras esté abierta). El deploy sigue firmándolo la cuenta (0) de anvil; tus cuentas reciben el rol de emisor y los USDT de prueba. Con esta opción se saltea la importación de claves de [5.3](#53-importar-las-cuentas): solo hace falta [agregar la red Anvil](#52-agregar-la-red-anvil-solo-para-la-opción-a). Si se reinicia anvil, hay que repetir el `anvil_setBalance`.
+
 ### A.3 Terminal 2: frontend
 
 ```powershell
@@ -137,6 +156,8 @@ Al cerrar anvil se pierde todo. Para volver a empezar:
 
 ## B. Sepolia (entrega)
 
+> Guía completa, con el deploy actual, los controles posteriores y los problemas reales que aparecieron: **[DEMO_SEPOLIA.md](DEMO_SEPOLIA.md)**.
+
 ### B.1 Qué se necesita
 
 - **3 billeteras** de MetaMask: Creador (también hace de deployer), Inversor A, Inversor B. **No usar billeteras con fondos reales.**
@@ -177,10 +198,15 @@ La clave queda cifrada en `~/.foundry/keystores`, fuera del repo.
 ### B.4 Deploy y verificación
 
 ```powershell
-forge script script/Deploy.s.sol --rpc-url sepolia --account deployer --broadcast --verify
+forge script script/Deploy.s.sol --rpc-url sepolia --account deployer --broadcast --verify --skip-simulation --slow
 ```
 
-Pide la contraseña del keystore. Al terminar:
+Pide la contraseña del keystore. Requiere Foundry ≥ 1.8 (`forge --version`).
+
+- `--skip-simulation`: el gas de cada transacción lo estima el nodo de Sepolia. La simulación local de Foundry usa el `evm_version` del proyecto (`cancun`) y desde el hardfork Glamsterdam (octubre 2026) subestima mucho el costo de crear contratos: sin este flag las creaciones fallan por falta de gas.
+- `--slow`: manda cada transacción recién cuando la anterior está confirmada, así la estimación de la siguiente ve los contratos ya desplegados.
+
+Al terminar:
 
 - Las direcciones quedan en `deployments/11155111.json` (se commitea).
 - Los 4 contratos quedan verificados en Etherscan: `https://sepolia.etherscan.io/address/<dirección>#code`.
@@ -255,7 +281,7 @@ Para Sepolia no hace falta agregar nada: ya viene en *Redes de prueba* (activar 
 
 ### 5.3 Importar las cuentas
 
-**Para anvil:** copiar de la salida de `anvil` las *private keys* de las cuentas **(1)**, **(2)** y **(3)**. Son claves de prueba públicas, iguales en cualquier instalación de anvil: **nunca mandarles fondos reales**.
+**Para anvil:** si usaste [tus propias cuentas](#opción-usar-tus-propias-cuentas-de-metamask), saltear este paso. Si no, copiar de la salida de `anvil` las *private keys* de las cuentas **(1)**, **(2)** y **(3)**. Son claves de prueba públicas, iguales en cualquier instalación de anvil: **nunca mandarles fondos reales**.
 
 **Para Sepolia:** las claves de las billeteras de prueba propias.
 
@@ -335,4 +361,6 @@ Al final, la sección **Actividad** lista todo el flujo con link a cada transacc
 | "No tenías fracciones cuando se creó esta propuesta" | La cuenta compró después de la propuesta (snapshot) | Es el comportamiento esperado: así se evita comprar votos a último momento |
 | La propuesta sigue *Activa* después de los 10 min | En anvil no se minó ningún bloque nuevo | `cast rpc evm_mine` y recargar |
 | No aparecen propuestas ni actividad en Sepolia | El RPC rechaza `eth_getLogs` | Configurar `NEXT_PUBLIC_RPC_URL` en `frontend/.env.local` con Infura/Alchemy/publicnode y reiniciar `npm run dev` |
+| `Transaction Failure: 0x...` en las creaciones de contratos (Sepolia) | La simulación local subestimó el gas (cambio de precios de Glamsterdam) | Deployar con `--skip-simulation --slow` (B.4) y Foundry ≥ 1.8 |
+| `AccessControlUnauthorizedAccount(<tu dirección>, 0x00…)` al deployar | `Deploy.s.sol` viejo que tomaba `msg.sender` en vez de la cuenta firmante | Actualizar el repo: el script usa `vm.readCallers()` |
 | Falla `--verify` en el deploy | Falta `ETHERSCAN_API_KEY` o timeout de Etherscan | Revisar `.env` y reintentar con `--resume --verify` |

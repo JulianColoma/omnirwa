@@ -13,13 +13,14 @@ export type ActivityItem =
   | { kind: "claim"; account: Address; amount: bigint }
   | { kind: "sale"; active: boolean }
   | { kind: "resolution"; hash: Hash }
+  | { kind: "proposal"; account: Address; title: string }
   | { kind: "vote"; account: Address; support: number; weight: bigint };
 
 export type ActivityEntry = ActivityItem & { txHash: Hash; blockNumber: bigint; logIndex: number };
 
 const LIMIT = 12;
 
-/** Últimos eventos del activo (tokenizer filtrado por id + votos del Governor), del más nuevo al más viejo. */
+/** Últimos eventos del activo (tokenizer filtrado por id + propuestas y votos del Governor), del más nuevo al más viejo. */
 export function useActivity() {
   const client = usePublicClient({ chainId: chain.id });
   const { tokenizer, governor } = addresses;
@@ -31,7 +32,7 @@ export function useActivity() {
       if (!client || !tokenizer || !governor) return [];
       const latest = await client.getBlockNumber();
 
-      const [tokenizerLogs, voteLogs] = await Promise.all([
+      const [tokenizerLogs, governorLogs] = await Promise.all([
         getLogsChunked(
           (fromBlock, toBlock) =>
             client.getContractEvents({ address: tokenizer, abi: abis.tokenizer, fromBlock, toBlock }),
@@ -40,13 +41,7 @@ export function useActivity() {
         ),
         getLogsChunked(
           (fromBlock, toBlock) =>
-            client.getContractEvents({
-              address: governor,
-              abi: abis.governor,
-              eventName: "VoteCast",
-              fromBlock,
-              toBlock,
-            }),
+            client.getContractEvents({ address: governor, abi: abis.governor, fromBlock, toBlock }),
           START_BLOCK,
           latest,
         ),
@@ -101,14 +96,27 @@ export function useActivity() {
         }
       }
 
-      for (const log of voteLogs) {
-        entries.push({
-          kind: "vote",
-          account: log.args.voter!,
-          support: log.args.support!,
-          weight: log.args.weight!,
-          ...meta(log),
-        });
+      for (const log of governorLogs) {
+        const args = log.args as Record<string, unknown>;
+        switch (log.eventName) {
+          case "ProposalCreated":
+            entries.push({
+              kind: "proposal",
+              account: args.proposer as Address,
+              title: (args.description as string).split("\n")[0],
+              ...meta(log),
+            });
+            break;
+          case "VoteCast":
+            entries.push({
+              kind: "vote",
+              account: args.voter as Address,
+              support: args.support as number,
+              weight: args.weight as bigint,
+              ...meta(log),
+            });
+            break;
+        }
       }
 
       return entries
