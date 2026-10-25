@@ -101,7 +101,7 @@ omnirwa/
 | D9 | `votingDelay = 0` | Cierra la ventana de compra entre propuesta y snapshot |
 | D10 | El Governor **ejecuta** acciones reales | `setSaleActive` / `recordResolution` solo sobre su activo |
 | D11 | Pago directo al creador | Simplicidad del MVP (escrow → roadmap) |
-| D12 | Metadata en IPFS, on-chain solo `bytes32` | Evitar strings largos (gas) |
+| D12 | Metadata en IPFS, on-chain solo `bytes32` (hash del legajo y nombre corto de hasta 32 bytes) | Evitar strings largos (gas) |
 | D13 | `claimDividends` no se pausa | Siempre se puede retirar lo propio |
 | D14 | Reloj por timestamp (ERC-6372) | Períodos en segundos; `vm.warp` en tests |
 
@@ -235,10 +235,10 @@ Red: **Sepolia** (chainId 11155111).
 
 | Contrato | Dirección | Código verificado |
 |---|---|---|
-| MockUSDT | `0x470d4dbeD74ADB07ddB913f6809d23F354c24f9B` | [Etherscan](https://sepolia.etherscan.io/address/0x470d4dbeD74ADB07ddB913f6809d23F354c24f9B#code) |
-| RWATokenizer1155 | `0x6010Bc1953f0c158A66C7d2a2498149De7E5879C` | [Etherscan](https://sepolia.etherscan.io/address/0x6010Bc1953f0c158A66C7d2a2498149De7E5879C#code) |
-| AssetVotes | `0x69460822567B1078d96b71aC5c8D16685aED32c0` | [Etherscan](https://sepolia.etherscan.io/address/0x69460822567B1078d96b71aC5c8D16685aED32c0#code) |
-| OmniGovernor | `0x95a0EDEf0f720aAd42e425C5d131751AA9045205` | [Etherscan](https://sepolia.etherscan.io/address/0x95a0EDEf0f720aAd42e425C5d131751AA9045205#code) |
+| MockUSDT | `0xa41686cC85a839d288bf35816FFC6E2d27DDc1e0` | [Etherscan](https://sepolia.etherscan.io/address/0xa41686cC85a839d288bf35816FFC6E2d27DDc1e0#code) |
+| RWATokenizer1155 | `0x207896BC9c47A105D5A6D01C53b5F036263950bf` | [Etherscan](https://sepolia.etherscan.io/address/0x207896BC9c47A105D5A6D01C53b5F036263950bf#code) |
+| AssetVotes | `0x35bCc99bE269cDcD1c2161308425b3a7C90095A9` | [Etherscan](https://sepolia.etherscan.io/address/0x35bCc99bE269cDcD1c2161308425b3a7C90095A9#code) |
+| OmniGovernor | `0x1BB6c9469bdE84Bee3925d365255b47F0f0c5d38` | [Etherscan](https://sepolia.etherscan.io/address/0x1BB6c9469bdE84Bee3925d365255b47F0f0c5d38#code) |
 
 ## 11. Transacciones del flujo principal
 
