@@ -3,20 +3,29 @@
 ## Cómo correrlo
 
 ```bash
-pipx install slither-analyzer        # o: pip install slither-analyzer
+pipx install slither-analyzer        # o: uv tool install slither-analyzer / pip install slither-analyzer
 slither .                            # usa slither.config.json (filtra lib/, test/, script/)
 slither . --checklist > docs/slither-report.md
 ```
 
+> Slither llama a `forge`: el primero en el `PATH` tiene que ser el de Foundry (`~/.foundry/bin`). Si hay otro
+> `forge` antes, falla con `The --build-info option does not exist`.
+> El código de salida 255 solo indica que hay hallazgos.
+
 ## Hallazgos
 
-> TODO(B): completar después de correr Slither sobre el código final (antes del deploy del 25/10).
-> Estados posibles: **Corregido** · **Falso positivo** · **Aceptado** (con justificación) · **Externo** (OpenZeppelin).
+Slither 0.11.6 sobre el código final: **7 resultados en 4 detectores**, ninguno de severidad alta.
+Reporte completo: [slither-report.md](slither-report.md).
+Estados posibles: **Corregido** · **Falso positivo** · **Aceptado** (con justificación) · **Externo** (OpenZeppelin).
 
-| Detector | Contrato / función | Estado | Justificación |
-|---|---|---|---|
-| `timestamp` | `RWATokenizer1155.balanceOfAt/totalSupplyAt`, Governor | Aceptado (esperado) | Las ventanas son de minutos o días; un validador solo puede correr el timestamp unos segundos. |
-| `divide-before-multiply` | `RWATokenizer1155._accrue` / `depositDividends` | Aceptado (esperado) | Patrón intencional del acumulador; error acotado por `PRECISION = 1e18` y cubierto por el fuzz test. |
-| `unused-return` | `Checkpoints.push` en `_update` | Aceptado (esperado) | El valor de retorno (saldo anterior/nuevo) no se necesita. |
-| `reentrancy-*` | `buyFractions`, `claimDividends`, `depositDividends` | A revisar | `nonReentrant` + CEI: estado y eventos antes de las llamadas externas. |
-| varios | `lib/openzeppelin-contracts` | Externo | Fuera de alcance. |
+| Detector | Impacto | Contrato / función | Estado | Justificación |
+|---|---|---|---|---|
+| `unused-return` (×3) | Medium | `RWATokenizer1155._update` (`Checkpoints.push`) | Aceptado | `push` devuelve el saldo anterior y el nuevo, que no se necesitan: el valor nuevo ya se calculó antes. |
+| `timestamp` (×2) | Low | `RWATokenizer1155.balanceOfAt` / `totalSupplyAt` | Aceptado | Solo se compara para rechazar consultas a futuro (`FutureLookup`). Las ventanas de votación son de minutos o días un validador solo puede mover el timestamp unos segundos. |
+| `naming-convention` | Informational | `AssetVotes.CLOCK_MODE()` | Falso positivo | El nombre lo exige ERC-6372 (`IERC6372.CLOCK_MODE`); el Governor de OZ lo llama asi. |
+| `unimplemented-functions` | Informational | `RWATokenizer1155` / `IRWATokenizer.balanceOf` | Falso positivo | Está implementada con `override(ERC1155, IRWATokenizer)`, si no, el contrato no compilaría. |
+| varios | — | `lib/openzeppelin-contracts` | Externo | Fuera de alcance (filtrado por `slither.config.json`). |
+
+Detectores que se esperaban y **no aparecen** en la corrida final: `reentrancy-*` (`nonReentrant` + CEI en
+`buyFractions`, `depositDividends` y `claimDividends`) y `divide-before-multiply` (el acumulador de dividendos
+multiplica por `PRECISION` antes de dividir).
