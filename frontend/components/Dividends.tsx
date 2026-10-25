@@ -1,7 +1,7 @@
 "use client";
 
 import { useAccount, useWriteContract } from "wagmi";
-import { abis, addresses, ASSET_ID } from "@/lib/contracts";
+import { abis, addresses } from "@/lib/contracts";
 import { formatInt, formatUsdt, percent } from "@/lib/format";
 import { useAsset, useCanWrite, usePosition } from "@/lib/useAsset";
 import { useTx } from "@/lib/useTx";
@@ -10,31 +10,32 @@ import { TxStatus } from "./TxStatus";
 /** Posición de la cuenta conectada: fracciones, participación y dividendos pendientes (retiro pull). */
 export function Dividends() {
   const { isConnected } = useAccount();
-  const { asset } = useAsset();
+  const { assetId, asset } = useAsset();
   const { fractions, pending, usdtBalance } = usePosition();
   const { canWrite, gate } = useCanWrite();
   const { writeContractAsync } = useWriteContract();
   const tx = useTx();
 
-  if (!asset) return null;
+  if (!asset || assetId === undefined) return null;
 
   const claim = () =>
     tx.run((step) =>
-      step("retiro de dividendos", () =>
+      step("retiro de la renta", (fees) =>
         writeContractAsync({
+          ...fees,
           address: addresses.tokenizer!,
           abi: abis.tokenizer,
           functionName: "claimDividends",
-          args: [ASSET_ID],
+          args: [assetId],
         }),
       ),
     );
 
   return (
-    <section className="panel">
-      <h2>Tu posición</h2>
+    <section className="orwa-card">
+      <h2 className="card-title">Tu posición</h2>
       {!isConnected ? (
-        <p className="hint">Conectá tu billetera para ver tus fracciones y dividendos.</p>
+        <p className="hint">Conectá tu wallet para ver tus fracciones y tu renta.</p>
       ) : (
         <>
           <div className="line">
@@ -49,18 +50,18 @@ export function Dividends() {
           </div>
           <div className="line">
             <span>Saldo USDT</span>
-            <span className="num">{usdtBalance !== undefined ? formatUsdt(usdtBalance) : "—"}</span>
+            <span className="num">{usdtBalance !== undefined ? `${formatUsdt(usdtBalance)} USDT` : "—"}</span>
           </div>
           <div className="line line-strong">
-            <span>Dividendos a retirar</span>
+            <span>Renta para retirar</span>
             <span className="num">{pending !== undefined ? `${formatUsdt(pending)} USDT` : "—"}</span>
           </div>
           <button
-            className="button button-secondary"
+            className="orwa-btn orwa-btn--secondary"
             disabled={!canWrite || !pending || tx.busy}
             onClick={claim}
           >
-            Retirar dividendos
+            {pending ? `Retirar ${formatUsdt(pending)} USDT` : "Retirar renta"}
           </button>
           {gate && <p className="hint">{gate}</p>}
           <TxStatus state={tx.state} />

@@ -3,7 +3,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { usePublicClient } from "wagmi";
 import type { Address, Hash } from "viem";
-import { abis, addresses, ASSET_ID, chain, START_BLOCK } from "./contracts";
+import { abis, addresses, chain, START_BLOCK } from "./contracts";
+import { useAsset } from "./useAsset";
 import { getLogsChunked } from "./useProposals";
 
 export type ActivityItem =
@@ -20,16 +21,20 @@ export type ActivityEntry = ActivityItem & { txHash: Hash; blockNumber: bigint; 
 
 const LIMIT = 12;
 
-/** Últimos eventos del activo (tokenizer filtrado por id + propuestas y votos del Governor), del más nuevo al más viejo. */
+/**
+ * Últimos eventos del activo seleccionado (tokenizer filtrado por id + propuestas y votos de su Governor, si
+ * tiene uno válido), del más nuevo al más viejo.
+ */
 export function useActivity() {
   const client = usePublicClient({ chainId: chain.id });
-  const { tokenizer, governor } = addresses;
+  const { tokenizer } = addresses;
+  const { assetId, governor } = useAsset();
 
   return useQuery({
-    queryKey: ["activity", tokenizer, governor],
-    enabled: Boolean(client && tokenizer && governor),
+    queryKey: ["activity", tokenizer, assetId?.toString(), governor],
+    enabled: Boolean(client && tokenizer && assetId !== undefined),
     queryFn: async (): Promise<ActivityEntry[]> => {
-      if (!client || !tokenizer || !governor) return [];
+      if (!client || !tokenizer || assetId === undefined) return [];
       const latest = await client.getBlockNumber();
 
       const [tokenizerLogs, governorLogs] = await Promise.all([
@@ -39,12 +44,14 @@ export function useActivity() {
           START_BLOCK,
           latest,
         ),
-        getLogsChunked(
-          (fromBlock, toBlock) =>
-            client.getContractEvents({ address: governor, abi: abis.governor, fromBlock, toBlock }),
-          START_BLOCK,
-          latest,
-        ),
+        governor
+          ? getLogsChunked(
+              (fromBlock, toBlock) =>
+                client.getContractEvents({ address: governor, abi: abis.governor, fromBlock, toBlock }),
+              START_BLOCK,
+              latest,
+            )
+          : [],
       ]);
 
       const entries: ActivityEntry[] = [];
@@ -56,7 +63,7 @@ export function useActivity() {
 
       for (const log of tokenizerLogs) {
         const args = log.args as Record<string, unknown>;
-        if (args.id !== ASSET_ID) continue;
+        if (args.id !== assetId) continue;
         switch (log.eventName) {
           case "AssetRegistered":
             entries.push({

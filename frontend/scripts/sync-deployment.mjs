@@ -16,8 +16,6 @@ const values = {
   NEXT_PUBLIC_CHAIN_ID: chainId,
   NEXT_PUBLIC_USDT_ADDRESS: deployment.MockUSDT,
   NEXT_PUBLIC_TOKENIZER_ADDRESS: deployment.RWATokenizer1155,
-  NEXT_PUBLIC_GOVERNOR_ADDRESS: deployment.OmniGovernor,
-  NEXT_PUBLIC_ASSET_ID: String(deployment.assetId ?? 1),
   NEXT_PUBLIC_START_BLOCK: String(deployment.startBlock ?? 0),
 };
 

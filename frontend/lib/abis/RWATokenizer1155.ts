@@ -138,6 +138,11 @@ export const RWATokenizer1155Abi = [
         "name": "docHash",
         "type": "bytes32",
         "internalType": "bytes32"
+      },
+      {
+        "name": "name",
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ],
     "stateMutability": "view"
@@ -476,6 +481,11 @@ export const RWATokenizer1155Abi = [
       },
       {
         "name": "docHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "name",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -820,6 +830,12 @@ export const RWATokenizer1155Abi = [
       },
       {
         "name": "docHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "name",
         "type": "bytes32",
         "indexed": false,
         "internalType": "bytes32"
@@ -1278,6 +1294,11 @@ export const RWATokenizer1155Abi = [
         "internalType": "address"
       }
     ]
+  },
+  {
+    "type": "error",
+    "name": "EmptyName",
+    "inputs": []
   },
   {
     "type": "error",

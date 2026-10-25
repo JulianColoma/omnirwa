@@ -1,18 +1,19 @@
 "use client";
 
-import { ASSET_ID, addressUrl } from "@/lib/contracts";
+import { addressUrl } from "@/lib/contracts";
 import { describeError } from "@/lib/errors";
-import { formatInt, formatUsdt, percent, shortAddress, shortHash } from "@/lib/format";
-import { useAsset } from "@/lib/useAsset";
+import { formatInt, formatUsdt } from "@/lib/format";
+import { useAsset, usePosition } from "@/lib/useAsset";
+import { AddressChip, Badge, FractionGrid, FundingProgress, StatTile } from "./ui";
 
-/** Encabezado del activo: nombre, avance de la venta y datos del struct `Asset`. */
-export function AssetInfo() {
-  const { asset, paused, governorName, isLoading, error } = useAsset();
-  const title = governorName?.replace(/^OmniRWA\s+/, "") || `Activo #${ASSET_ID}`;
+/** Encabezado del activo, visible en todas las pestañas: estado, nombre, emisor y recaudación. */
+export function AssetHeader() {
+  const { assetId, asset, title, paused, governorStatus, isLoading, error } = useAsset();
+  const label = `Activo #${assetId?.toString() ?? ""}`;
 
   if (error) {
     return (
-      <section className="hero">
+      <section className="page-head">
         <p className="status status-error">No se pudo leer el contrato: {describeError(error)}</p>
       </section>
     );
@@ -20,8 +21,8 @@ export function AssetInfo() {
 
   if (isLoading || asset === undefined) {
     return (
-      <section className="hero">
-        <p className="eyebrow">Activo #{ASSET_ID.toString()}</p>
+      <section className="page-head">
+        <span className="orwa-eyebrow">{label}</span>
         <h1 className="title placeholder">Cargando…</h1>
       </section>
     );
@@ -29,68 +30,94 @@ export function AssetInfo() {
 
   if (asset === null) {
     return (
-      <section className="hero">
-        <p className="eyebrow">Activo #{ASSET_ID.toString()}</p>
-        <h1 className="title">{title}</h1>
-        <p className="lead">El activo todavía no fue registrado. Un emisor habilitado puede registrarlo desde abajo.</p>
+      <section className="page-head">
+        <span className="orwa-eyebrow">{label}</span>
+        <h1 className="title">Este activo no existe</h1>
+        <p className="hint">Volvé al listado y elegí otro, o creá uno nuevo.</p>
       </section>
     );
   }
 
+  return (
+    <section className="page-head">
+      <div className="asset-head__meta">
+        <span className="orwa-eyebrow">{label}</span>
+        {paused ? (
+          <Badge tone="warning">Compras pausadas</Badge>
+        ) : asset.saleActive ? (
+          <Badge tone="positive">Venta abierta</Badge>
+        ) : (
+          <Badge tone="plain">Venta cerrada</Badge>
+        )}
+        {governorStatus === "valid" && <Badge tone="chain">Registrado on-chain</Badge>}
+      </div>
+      <div>
+        <h1 className="title">{title}</h1>
+        <p className="issuer">
+          Emite <AddressChip value={asset.creator} href={addressUrl(asset.creator)} />
+        </p>
+      </div>
+      <FundingProgress sold={asset.soldFractions} max={asset.maxFractions} />
+    </section>
+  );
+}
+
+/** Pestaña Resumen: quién tiene las fracciones, cifras clave y datos verificables del activo. */
+export function AssetSummary() {
+  const { asset, linkedGovernor } = useAsset();
+  const { fractions } = usePosition();
+
+  if (!asset) return null;
+
   const remaining = asset.maxFractions - asset.soldFractions;
   const raised = asset.soldFractions * asset.pricePerFraction;
-  const creatorUrl = addressUrl(asset.creator);
 
   return (
-    <section className="hero">
-      <p className="eyebrow">
-        Activo #{ASSET_ID.toString()} ·{" "}
-        <span className={asset.saleActive && !paused ? "tag tag-on" : "tag"}>
-          {paused ? "pausado" : asset.saleActive ? "venta abierta" : "venta cerrada"}
-        </span>
-      </p>
-      <h1 className="title">{title}</h1>
-
-      <div className="progress" aria-label="Fracciones vendidas">
-        <div
-          className="progress-bar"
-          style={{ width: `${asset.maxFractions === 0n ? 0 : Number((asset.soldFractions * 1000n) / asset.maxFractions) / 10}%` }}
-        />
+    <div className="section">
+      <div className="orwa-card">
+        <h2 className="card-title">Fracciones</h2>
+        <FractionGrid max={asset.maxFractions} sold={asset.soldFractions} mine={fractions ?? 0n} />
       </div>
-      <p className="progress-label">
-        {formatInt(asset.soldFractions)} de {formatInt(asset.maxFractions)} fracciones vendidas (
-        {percent(asset.soldFractions, asset.maxFractions)}%)
-      </p>
-
-      <dl className="stats">
-        <div>
-          <dt>Precio por fracción</dt>
-          <dd>{formatUsdt(asset.pricePerFraction)} USDT</dd>
-        </div>
-        <div>
-          <dt>Disponibles</dt>
-          <dd>{formatInt(remaining)}</dd>
-        </div>
-        <div>
-          <dt>Recaudado</dt>
-          <dd>{formatUsdt(raised)} USDT</dd>
-        </div>
-        <div>
-          <dt>Emisor</dt>
-          <dd className="mono">
-            {creatorUrl ? (
-              <a href={creatorUrl} target="_blank" rel="noreferrer">
-                {shortAddress(asset.creator)}
-              </a>
-            ) : (
-              shortAddress(asset.creator)
-            )}
-          </dd>
-        </div>
-      </dl>
-      <p className="fineprint mono" title={asset.docHash}>
-        Legajo {shortHash(asset.docHash)}
-      </p>
-    </section>
+      <div className="stats">
+        <StatTile label="Precio por fracción" value={formatUsdt(asset.pricePerFraction)} unit="USDT" />
+        <StatTile
+          label="Recaudado"
+          value={formatUsdt(raised)}
+          unit="USDT"
+          note={`${formatInt(asset.soldFractions)} fracciones vendidas`}
+        />
+        <StatTile label="Disponibles" value={formatInt(remaining)} note={`De ${formatInt(asset.maxFractions)} fracciones`} />
+      </div>
+      <div className="orwa-card">
+        <h2 className="card-title">Datos on-chain</h2>
+        <dl className="contracts">
+          <div>
+            <dt>Emisor</dt>
+            <dd>
+              <AddressChip value={asset.creator} href={addressUrl(asset.creator)} />
+            </dd>
+          </div>
+          <div>
+            <dt>Hash del legajo</dt>
+            <dd>
+              <AddressChip value={asset.docHash} />
+            </dd>
+          </div>
+          <div>
+            <dt>Junta (OmniGovernor)</dt>
+            <dd>
+              {linkedGovernor ? (
+                <AddressChip
+                  value={linkedGovernor}
+                  href={addressUrl(linkedGovernor) && `${addressUrl(linkedGovernor)}#code`}
+                />
+              ) : (
+                <span className="hint">Sin vincular</span>
+              )}
+            </dd>
+          </div>
+        </dl>
+      </div>
+    </div>
   );
 }

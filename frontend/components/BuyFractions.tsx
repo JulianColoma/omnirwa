@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useWriteContract } from "wagmi";
-import { abis, addresses, ASSET_ID } from "@/lib/contracts";
+import { abis, addresses } from "@/lib/contracts";
 import { formatInt, formatUsdt } from "@/lib/format";
 import { useAsset, useCanWrite, usePosition } from "@/lib/useAsset";
 import { useTx } from "@/lib/useTx";
@@ -21,14 +21,14 @@ function parseAmount(value: string): bigint | undefined {
  * después llama a `buyFractions`.
  */
 export function BuyFractions() {
-  const { asset, paused } = useAsset();
+  const { assetId, asset, paused, governorStatus } = useAsset();
   const { usdtBalance, allowance } = usePosition();
   const { canWrite, gate } = useCanWrite();
   const { writeContractAsync } = useWriteContract();
   const tx = useTx();
   const [input, setInput] = useState("10");
 
-  if (!asset) return null;
+  if (!asset || assetId === undefined) return null;
 
   const amount = parseAmount(input);
   const remaining = asset.maxFractions - asset.soldFractions;
@@ -38,6 +38,7 @@ export function BuyFractions() {
 
   let problem: string | undefined;
   if (!open) problem = paused ? "Las compras están pausadas." : "La venta está cerrada.";
+  else if (governorStatus === "invalid") problem = "La junta vinculada a este activo no es un Governor válido.";
   else if (input !== "" && amount === undefined) problem = "Ingresá una cantidad entera mayor a cero.";
   else if (amount !== undefined && amount > remaining) problem = `Solo quedan ${formatInt(remaining)} fracciones.`;
   else if (amount !== undefined && usdtBalance !== undefined && usdtBalance < cost) problem = "No tenés USDT suficiente.";
@@ -46,8 +47,9 @@ export function BuyFractions() {
     amount !== undefined &&
     tx.run(async (step) => {
       if (needsApproval) {
-        await step("aprobación de USDT", () =>
+        await step("aprobación de USDT", (fees) =>
           writeContractAsync({
+            ...fees,
             address: addresses.usdt!,
             abi: abis.usdt,
             functionName: "approve",
@@ -55,19 +57,20 @@ export function BuyFractions() {
           }),
         );
       }
-      await step(`compra de ${formatInt(amount)} fracciones`, () =>
+      await step(`compra de ${formatInt(amount)} fracciones`, (fees) =>
         writeContractAsync({
+          ...fees,
           address: addresses.tokenizer!,
           abi: abis.tokenizer,
           functionName: "buyFractions",
-          args: [ASSET_ID, amount],
+          args: [assetId, amount],
         }),
       );
     });
 
   return (
-    <section className="panel">
-      <h2>Comprar</h2>
+    <section className="orwa-card">
+      <h2 className="card-title">Comprar fracciones</h2>
       <label className="field">
         <span>Fracciones</span>
         <input
@@ -84,21 +87,24 @@ export function BuyFractions() {
         <span>Total</span>
         <span className="num">{formatUsdt(cost)} USDT</span>
       </div>
-      <div className="line muted">
+      <div className="line">
         <span>Tu saldo</span>
         <span className="num">{usdtBalance !== undefined ? `${formatUsdt(usdtBalance)} USDT` : "—"}</span>
       </div>
       <button
-        className="button"
-        disabled={!canWrite || !open || amount === undefined || Boolean(problem) || tx.busy}
+        className="orwa-btn orwa-btn--primary"
+        disabled={!canWrite || !open || governorStatus === "invalid" || amount === undefined || Boolean(problem) || tx.busy}
         onClick={buy}
       >
-        {needsApproval ? "Aprobar y comprar" : "Comprar"}
+        {needsApproval ? "Aprobar y comprar fracciones" : "Comprar fracciones"}
       </button>
       {needsApproval && !problem && (
         <p className="hint">Se firman dos transacciones: la aprobación del monto exacto y la compra.</p>
       )}
       {problem && <p className="hint">{problem}</p>}
+      {governorStatus === "none" && !problem && (
+        <p className="hint">Este activo todavía no tiene junta de inversores: por ahora no se puede votar.</p>
+      )}
       {gate && <p className="hint">{gate}</p>}
       <TxStatus state={tx.state} />
     </section>

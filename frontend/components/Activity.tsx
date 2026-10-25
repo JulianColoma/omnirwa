@@ -2,8 +2,9 @@
 
 import { txUrl } from "@/lib/contracts";
 import { describeError } from "@/lib/errors";
-import { formatInt, formatUsdt, shortAddress, shortHash } from "@/lib/format";
+import { formatInt, formatUsdt, shortAddress } from "@/lib/format";
 import { useActivity, type ActivityEntry } from "@/lib/useActivity";
+import { AddressChip } from "./ui";
 
 const SUPPORT = ["en contra", "a favor", "abstención"];
 
@@ -14,13 +15,13 @@ function describe(entry: ActivityEntry) {
     case "purchase":
       return `${shortAddress(entry.account)} compró ${formatInt(entry.amount)} fracciones por ${formatUsdt(entry.cost)} USDT`;
     case "deposit":
-      return `Depósito de ${formatUsdt(entry.amount)} USDT en dividendos`;
+      return `El emisor depositó ${formatUsdt(entry.amount)} USDT de renta`;
     case "claim":
       return `${shortAddress(entry.account)} retiró ${formatUsdt(entry.amount)} USDT`;
     case "sale":
       return entry.active ? "La junta reabrió la venta" : "La junta cerró la venta";
     case "resolution":
-      return `Resolución aprobada ${shortHash(entry.hash)}`;
+      return `Resolución aprobada ${shortAddress(entry.hash)}`;
     case "proposal":
       return `${shortAddress(entry.account)} propuso "${entry.title}"`;
     case "vote":
@@ -41,23 +42,12 @@ export function Activity() {
       {isLoading && <p className="hint">Leyendo eventos…</p>}
       {data && data.length === 0 && <p className="empty">Sin movimientos todavía.</p>}
       <ul className="activity">
-        {data?.map((entry) => {
-          const url = txUrl(entry.txHash);
-          return (
-            <li key={`${entry.txHash}-${entry.logIndex}`}>
-              <span>{describe(entry)}</span>
-              <span className="mono meta">
-                {url ? (
-                  <a href={url} target="_blank" rel="noreferrer">
-                    #{entry.blockNumber.toString()}
-                  </a>
-                ) : (
-                  `#${entry.blockNumber.toString()}`
-                )}
-              </span>
-            </li>
-          );
-        })}
+        {data?.map((entry) => (
+          <li key={`${entry.txHash}-${entry.logIndex}`}>
+            <span>{describe(entry)}</span>
+            <AddressChip value={entry.txHash} href={txUrl(entry.txHash)} label="tx" />
+          </li>
+        ))}
       </ul>
     </section>
   );

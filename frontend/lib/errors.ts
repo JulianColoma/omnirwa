@@ -11,9 +11,9 @@ import { abis } from "./contracts";
 
 type AbiError = Extract<AbiItem, { type: "error" }>;
 
-/** Errores de los tres contratos por selector: una compra puede revertir dentro de MockUSDT, por ejemplo. */
+/** Errores de los contratos por selector: una compra puede revertir dentro de MockUSDT, por ejemplo. */
 const errorsBySelector = new Map(
-  ([...abis.usdt, ...abis.tokenizer, ...abis.governor] as readonly AbiItem[])
+  ([...abis.usdt, ...abis.tokenizer, ...abis.votes, ...abis.governor] as readonly AbiItem[])
     .filter((item): item is AbiError => item.type === "error")
     .map((item) => [toFunctionSelector(formatAbiItem(item)), item.name]),
 );
@@ -21,14 +21,17 @@ const errorsBySelector = new Map(
 const messages: Record<string, (args: readonly unknown[]) => string> = {
   SaleNotActive: () => "La venta de este activo está cerrada.",
   ZeroAmount: () => "La cantidad tiene que ser mayor a cero.",
+  EmptyName: () => "El activo necesita un nombre.",
   ExceedsAvailable: (args) =>
     args[1] !== undefined ? `Solo quedan ${String(args[1])} fracciones disponibles.` : "No quedan tantas fracciones.",
-  NotAssetCreator: () => "Solo el creador del activo puede depositar dividendos.",
+  NotAssetCreator: () => "Solo el creador del activo puede depositar la renta.",
+  GovernorAlreadySet: () => "Este activo ya tiene una junta vinculada.",
   NoHolders: () => "Todavía no hay fracciones vendidas entre las que repartir.",
   DepositTooSmall: () => "El monto es demasiado chico para repartirlo entre las fracciones emitidas.",
   NothingToClaim: () => "No tenés dividendos pendientes.",
   EnforcedPause: () => "El contrato está pausado.",
-  AccessControlUnauthorizedAccount: () => "Tu cuenta no tiene permiso para esta operación.",
+  AccessControlUnauthorizedAccount: () =>
+    "Tu cuenta no tiene permiso para esta operación (registrar requiere el rol de emisor; vincular la junta, el de administrador).",
   ERC20InsufficientBalance: () => "No tenés USDT suficiente.",
   ERC20InsufficientAllowance: () => "El USDT aprobado no alcanza.",
   GovernorInsufficientProposerVotes: () =>

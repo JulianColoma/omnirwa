@@ -2,13 +2,21 @@ import { isAddress, type Address } from "viem";
 import { foundry, sepolia } from "wagmi/chains";
 import { MockUSDTAbi } from "./abis/MockUSDT";
 import { RWATokenizer1155Abi } from "./abis/RWATokenizer1155";
-import { OmniGovernorAbi } from "./abis/OmniGovernor";
+import { AssetVotesAbi, AssetVotesBytecode } from "./abis/AssetVotes";
+import { OmniGovernorAbi, OmniGovernorBytecode } from "./abis/OmniGovernor";
 
 /** ABIs generados con `npm run abis` desde ../out (Foundry). */
 export const abis = {
   usdt: MockUSDTAbi,
   tokenizer: RWATokenizer1155Abi,
+  votes: AssetVotesAbi,
   governor: OmniGovernorAbi,
+};
+
+/** Bytecode de los contratos que despliega el creador de cada activo (su junta de inversores). */
+export const bytecodes = {
+  votes: AssetVotesBytecode,
+  governor: OmniGovernorBytecode,
 };
 
 /** Red objetivo: Sepolia por defecto, anvil (31337) para desarrollo local. */
@@ -22,12 +30,15 @@ function envAddress(value: string | undefined): Address | undefined {
 export const addresses = {
   usdt: envAddress(process.env.NEXT_PUBLIC_USDT_ADDRESS),
   tokenizer: envAddress(process.env.NEXT_PUBLIC_TOKENIZER_ADDRESS),
-  governor: envAddress(process.env.NEXT_PUBLIC_GOVERNOR_ADDRESS),
 };
 
-export const isConfigured = Boolean(addresses.usdt && addresses.tokenizer && addresses.governor);
+export const isConfigured = Boolean(addresses.usdt && addresses.tokenizer);
 
-export const ASSET_ID = BigInt(process.env.NEXT_PUBLIC_ASSET_ID || "1");
+/** Prefijo con el que se nombra el Governor de cada activo: "OmniRWA <nombre del activo>". */
+export const GOVERNOR_NAME_PREFIX = "OmniRWA ";
+
+/** Duración de la votación que se sugiere al crear un activo (10 minutos). */
+export const DEFAULT_VOTING_MINUTES = 10;
 
 /** Bloque del deploy: desde acá se leen los eventos. */
 export const START_BLOCK = BigInt(process.env.NEXT_PUBLIC_START_BLOCK || "0");

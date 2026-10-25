@@ -2,47 +2,36 @@
 
 import type { TxState } from "@/lib/useTx";
 import { txUrl } from "@/lib/contracts";
-import { shortHash } from "@/lib/format";
+import { AddressChip } from "./ui";
 
 function TxLink({ hash }: { hash: string }) {
-  const url = txUrl(hash);
-  if (!url) return <span className="mono">{shortHash(hash)}</span>;
-  return (
-    <a className="mono" href={url} target="_blank" rel="noreferrer">
-      {shortHash(hash)}
-    </a>
-  );
+  return <AddressChip value={hash} href={txUrl(hash)} label="tx" />;
 }
 
-/** Línea de estado debajo de una acción: firma, confirmación, éxito o error. */
+/** Los tres pasos de una transacción en palabras: firma, registro on-chain y listo (o error). */
 export function TxStatus({ state }: { state: TxState }) {
   switch (state.status) {
     case "idle":
       return null;
     case "signing":
-      return <p className="status">Confirmá en tu billetera: {state.label}.</p>;
+      return <p className="status">Confirmá en tu wallet: {state.label}.</p>;
     case "pending":
       return (
         <p className="status">
-          Esperando confirmación: {state.label} · <TxLink hash={state.hash} />
+          Registrando on-chain: {state.label}. <TxLink hash={state.hash} />
         </p>
       );
     case "success":
       return (
         <p className="status status-ok">
-          Confirmada: {state.label} · <TxLink hash={state.hash} />
+          Listo: {state.label}. <TxLink hash={state.hash} />
         </p>
       );
     case "error":
       return (
         <p className="status status-error">
           {state.message}
-          {state.hash && (
-            <>
-              {" "}
-              · <TxLink hash={state.hash} />
-            </>
-          )}
+          {state.hash && <TxLink hash={state.hash} />}
         </p>
       );
   }
