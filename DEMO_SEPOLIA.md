@@ -53,7 +53,7 @@ Con otras billeteras hay que hacer un deploy propio (secciones 2 a 7).
 | Herramienta | Versión | Cómo verificar |
 |---|---|---|
 | [Foundry](https://book.getfoundry.sh/getting-started/installation) | **≥ 1.8** | `forge --version` |
-| Node.js | ≥ 20 | `node --version` |
+| Node.js | ≥ 24 | `node --version` |
 | Chrome o Edge + [MetaMask](https://metamask.io/download) | — | Ícono del zorro en la barra |
 | Cuenta de [Etherscan](https://etherscan.io/register) | — | Para la API key de verificación |
 

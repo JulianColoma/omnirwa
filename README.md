@@ -3,8 +3,6 @@
 > Fraccionamiento de activos reales (RWA) con ERC-1155, dividendos *pull over push* y gobernanza on-chain con snapshot, quórum y mayoría calificada.
 > Proyecto Final — Blockchain / Web3 · Stack: **Solidity 0.8.24 · Foundry · OpenZeppelin v5.1 · Next.js + wagmi/viem** · Red: **Sepolia**.
 
-> **Estado:** contratos, tests (78, coverage > 95% en todas las métricas), Slither, scripts de deploy/demo y frontend terminados y probados en local (anvil). **Falta:** deploy y verificación en Sepolia, correr la demo on-chain y completar las secciones marcadas con `TODO` (direcciones y transacciones, [§10](#10-red-y-contratos-desplegados) y [§11](#11-transacciones-del-flujo-principal)). Entrega: 27/10. El plan detallado está en [docs/PLAN.md](docs/PLAN.md) y el reparto en [CONTRIBUTING.md](CONTRIBUTING.md).
-
 ---
 
 ## Índice
@@ -151,15 +149,15 @@ forge test -vvv
 forge coverage --report summary --no-match-coverage "(script|test|lib)"
 ```
 
-78 tests (unitarios, fuzz e integración con los contratos reales), todos en verde. Coverage final:
+79 tests (unitarios, fuzz e integración con los contratos reales), todos en verde. Coverage final:
 
 | Archivo | % Líneas | % Statements | % Ramas | % Funciones |
 |---|---|---|---|---|
-| `contracts/RWATokenizer1155.sol` | 100,00% (92/92) | 99,13% (114/115) | 95,00% (19/20) | 100,00% (19/19) |
+| `contracts/RWATokenizer1155.sol` | 100,00% (93/93) | 99,15% (116/117) | 95,24% (20/21) | 100,00% (19/19) |
 | `contracts/governance/AssetVotes.sol` | 100,00% (25/25) | 100,00% (24/24) | 100,00% (5/5) | 100,00% (10/10) |
 | `contracts/governance/OmniGovernor.sol` | 100,00% (17/17) | 100,00% (20/20) | 100,00% (1/1) | 100,00% (7/7) |
 | `contracts/mocks/MockUSDT.sol` | 100,00% (5/5) | 100,00% (2/2) | N/A (0/0) | 100,00% (3/3) |
-| **Total** | **100,00% (139/139)** | **99,38% (160/161)** | **96,15% (25/26)** | **100,00% (39/39)** |
+| **Total** | **100,00% (140/140)** | **99,39% (162/163)** | **96,30% (26/27)** | **100,00% (39/39)** |
 
 ## 8. Slither
 
@@ -170,7 +168,7 @@ slither .
 
 Slither llama a `forge`: el primero en el `PATH` tiene que ser el de Foundry (`~/.foundry/bin`).
 
-Slither 0.11.6 sobre el código final: **7 resultados en 4 detectores, ninguno de severidad alta**.
+Slither 0.11.6 sobre el código desplegado (commit `b242d0f`, con el nombre del activo): **7 resultados en 4 detectores, ninguno de severidad alta**.
 
 | Detector | Impacto | Contrato / función | Estado | Justificación |
 |---|---|---|---|---|
@@ -180,6 +178,14 @@ Slither 0.11.6 sobre el código final: **7 resultados en 4 detectores, ninguno d
 | `unimplemented-functions` | Informational | `RWATokenizer1155` / `IRWATokenizer.balanceOf` | Falso positivo | Implementada con `override(ERC1155, IRWATokenizer)`. |
 
 No aparecen `reentrancy-*` (`nonReentrant` + CEI) ni `divide-before-multiply`. Detalle completo: [docs/SLITHER.md](docs/SLITHER.md).
+
+`forge build` compila sin errores y el linter de Foundry deja 7 avisos, todos analizados en [docs/SLITHER.md](docs/SLITHER.md#warnings-del-linter-de-forge-build):
+
+| Lint | Dónde | Estado |
+|---|---|---|
+| `block-timestamp` (×2), `unsafe-typecast` (×2) | `balanceOfAt` / `totalSupplyAt` (`uint48(block.timestamp)`) | Aceptado: solo rechazan consultas a futuro y `uint48` no trunca hasta dentro de millones de años |
+| `missing-events-access-control` | `setSaleActive` | Falso positivo: la función emite `SaleStatusChanged` |
+| `environment-read-across-mutation` (×2) | `test/RWATokenizer1155.t.sol` | Fuera de alcance: está en los tests |
 
 ## 9. Uso: deploy, demo y frontend
 
@@ -261,17 +267,20 @@ Red: **Sepolia** (chainId 11155111).
 
 ## 11. Transacciones del flujo principal
 
+Transacciones reales en Sepolia sobre el deploy de [§10](#10-red-y-contratos-desplegados). Activo 1: **"Lote de SOja"** (nombre tal como quedó on-chain), 10 fracciones a 10 USDT.
+
 | Paso | Actor | Tx |
 |---|---|---|
-| Registrar activo "Depto Rosario" (1.000 × 10 USDT) | Creador | `TODO` |
-| Compra 500 fracciones | Inversor A | `TODO` |
-| Compra 300 fracciones | Inversor B | `TODO` |
-| Propuesta 1: cerrar la venta | Inversor A | `TODO` |
-| Propuesta 2: vender a 120.000 (`recordResolution`) | Inversor A | `TODO` |
-| Votos | A / B | `TODO` |
-| Depósito de 800 USDT de dividendos | Creador | `TODO` |
-| Retiro de dividendos (500 / 300) | A / B | `TODO` |
-| Ejecución propuesta 1 → venta cerrada | Cualquiera | `TODO` |
+| Deploy: `MockUSDT` | Deployer | [`0xd8ac55f2…107481`](https://sepolia.etherscan.io/tx/0xd8ac55f20403f6438c25ad1f760ae773f761eb1dbc16179dd524801bbf107481) |
+| Deploy: `RWATokenizer1155` | Deployer | [`0x21c4b0e6…ef32c5`](https://sepolia.etherscan.io/tx/0x21c4b0e6068912f712931012e31151eb7d01dc98510d0f3f4b8795e10def32c5) |
+| `ISSUER_ROLE` al creador | Deployer | [`0x3c5bca01…225e1b`](https://sepolia.etherscan.io/tx/0x3c5bca01c8016404dbd4a6ecdcd33b825d9abbb2f06ed7f5049bff15e0225e1b) |
+| Mint de 10.000 USDT de prueba a cada inversor | Deployer | [`0x3b43c4a0…af217e`](https://sepolia.etherscan.io/tx/0x3b43c4a0b117f97c4f176e43bc396c8043e4455ab3c0e8efd4e9741728af217e) · [`0x5d4873d1…5b4cc4`](https://sepolia.etherscan.io/tx/0x5d4873d125b289a795108e40ce7842988d8a393f5dc5bae5826299f1695b4cc4) |
+| Deploy: `AssetVotes` (activo 1) | Deployer | [`0xa8d6b07c…5372cb`](https://sepolia.etherscan.io/tx/0xa8d6b07c499e2ed1b71473742a85bef31d298856dafa7aff832f596f5b5372cb) |
+| Deploy: `OmniGovernor` (delay 0, período 600 s, umbral 1, quórum 20%) | Deployer | [`0x7d3e6516…fdf2ca`](https://sepolia.etherscan.io/tx/0x7d3e65165f4c8089687c4a5b95a58d48d9d895dabe4086df9c6f7ceaeefdf2ca) |
+| `setAssetGovernor(1, OmniGovernor)` | Deployer | [`0x09a0a3fe…65d3fe`](https://sepolia.etherscan.io/tx/0x09a0a3fe8e8d2b0e45fc997fd123e97360ce093aa59cf56e2bb3ec399765d3fe) |
+| Registrar el activo 1 "Lote de SOja" (10 × 10 USDT) | Creador | [`0x9a60fd89…7c6183`](https://sepolia.etherscan.io/tx/0x9a60fd8990ca84c4690e7c49c27d299d072d0f6190f482fd8e8b44d0c07c6183) |
+| Compra de las 10 fracciones (100 USDT al creador) | Inversor B | [`0x5b0f7d49…8e8733`](https://sepolia.etherscan.io/tx/0x5b0f7d498442f992dc699d54377d6bdd3a74aea990ee1b3a84d958f4bb8e8733) |
+| Depósito de 1 USDT de renta (0,1 USDT por fracción) | Creador | [`0x55c3449f…bb19eb`](https://sepolia.etherscan.io/tx/0x55c3449f3fcf0a4440bbdc320bb8a49f7b056e89e9d3d5043eaff85473bb19eb) |
 
 ## 12. Limitaciones conocidas del MVP
 
@@ -308,5 +317,5 @@ Red: **Sepolia** (chainId 11155111).
 | Integrante | Rol | GitHub |
 |---|---|---|
 | Julián Valentín Coloma Visconti | A — Tokenizer y dividendos | [@JulianColoma](https://github.com/JulianColoma) |
-| Sofia Goszko | B — Gobernanza, tests de integración, coverage y Slither | [@SofiaGoszko](https://github.com/sofiagoszko) |
+| Sofia Goszko | B — Gobernanza, tests de integración, coverage y Slither | [@sofiagoszko](https://github.com/sofiagoszko) |
 | Nahuel Hernandez Ulanio | C — Scripts, frontend y entrega | [@NahueelHernandezUlanio](https://github.com/NahueelHernandezUlanio) |
