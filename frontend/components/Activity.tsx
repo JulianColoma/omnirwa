@@ -21,6 +21,8 @@ function describe(entry: ActivityEntry) {
       return entry.active ? "La junta reabrió la venta" : "La junta cerró la venta";
     case "resolution":
       return `Resolución aprobada ${shortHash(entry.hash)}`;
+    case "proposal":
+      return `${shortAddress(entry.account)} propuso "${entry.title}"`;
     case "vote":
       return `${shortAddress(entry.account)} votó ${SUPPORT[entry.support] ?? "?"} con ${formatInt(entry.weight)} fracciones`;
   }

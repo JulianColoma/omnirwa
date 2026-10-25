@@ -4,7 +4,13 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
 const chainId = process.argv[2] ?? "11155111";
-const deployment = JSON.parse(readFileSync(join(process.cwd(), "..", "deployments", `${chainId}.json`), "utf8"));
+const deploymentPath = join(process.cwd(), "..", "deployments", `${chainId}.json`);
+if (!existsSync(deploymentPath)) {
+  const hint = chainId === "31337" ? "" : " ¿Quisiste `npm run sync -- 31337` (anvil)?";
+  process.stderr.write(`No hay deploy para la red ${chainId} (falta deployments/${chainId}.json).${hint}\n`);
+  process.exit(1);
+}
+const deployment = JSON.parse(readFileSync(deploymentPath, "utf8"));
 
 const values = {
   NEXT_PUBLIC_CHAIN_ID: chainId,
