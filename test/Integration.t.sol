@@ -78,7 +78,7 @@ contract IntegrationTest is BaseTest {
     }
 
     function _saleActive() internal view returns (bool active) {
-        (,, active,,,) = tokenizer.assets(ID);
+        (,, active,,,,) = tokenizer.assets(ID);
     }
 
     function _assertState(uint256 proposalId, IGovernor.ProposalState expected) internal view {

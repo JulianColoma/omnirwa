@@ -1,29 +1,29 @@
+"use client";
+
 import { addresses, addressUrl, chain } from "@/lib/contracts";
+import { AddressChip } from "./ui";
 
 const rows = [
   ["RWATokenizer1155", addresses.tokenizer],
-  ["OmniGovernor", addresses.governor],
   ["MockUSDT", addresses.usdt],
 ] as const;
 
-/** Direcciones de los contratos en uso, con link al explorer. */
+/** Direcciones de los contratos de la plataforma, con link al código verificado. */
 export function Contracts() {
   return (
     <footer className="footer">
-      <p className="eyebrow">Contratos · {chain.name}</p>
+      <span className="orwa-eyebrow">Contratos · {chain.name}</span>
       <dl className="contracts">
         {rows.map(([name, address]) => {
           const url = address && addressUrl(address);
           return (
             <div key={name}>
               <dt>{name}</dt>
-              <dd className="mono">
-                {!address ? "sin configurar" : url ? (
-                  <a href={`${url}#code`} target="_blank" rel="noreferrer">
-                    {address}
-                  </a>
+              <dd>
+                {address ? (
+                  <AddressChip value={address} href={url ? `${url}#code` : undefined} />
                 ) : (
-                  address
+                  <span className="hint">Sin configurar</span>
                 )}
               </dd>
             </div>

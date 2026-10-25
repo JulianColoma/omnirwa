@@ -25,14 +25,14 @@ Los comandos son para **PowerShell** (Windows) y se corren desde la raíz del re
 
 ## 1. Deploy actual
 
-Red: **Sepolia** (chainId `11155111`). Bloque inicial: `11987394`.
+Red: **Sepolia** (chainId `11155111`). Bloque inicial: `11988458`.
 
 | Contrato | Dirección | Código verificado |
 |---|---|---|
-| MockUSDT | `0x470d4dbeD74ADB07ddB913f6809d23F354c24f9B` | [Etherscan](https://sepolia.etherscan.io/address/0x470d4dbeD74ADB07ddB913f6809d23F354c24f9B#code) |
-| RWATokenizer1155 | `0x6010Bc1953f0c158A66C7d2a2498149De7E5879C` | [Etherscan](https://sepolia.etherscan.io/address/0x6010Bc1953f0c158A66C7d2a2498149De7E5879C#code) |
-| AssetVotes | `0x69460822567B1078d96b71aC5c8D16685aED32c0` | [Etherscan](https://sepolia.etherscan.io/address/0x69460822567B1078d96b71aC5c8D16685aED32c0#code) |
-| OmniGovernor | `0x95a0EDEf0f720aAd42e425C5d131751AA9045205` | [Etherscan](https://sepolia.etherscan.io/address/0x95a0EDEf0f720aAd42e425C5d131751AA9045205#code) |
+| MockUSDT | `0xa41686cC85a839d288bf35816FFC6E2d27DDc1e0` | [Etherscan](https://sepolia.etherscan.io/address/0xa41686cC85a839d288bf35816FFC6E2d27DDc1e0#code) |
+| RWATokenizer1155 | `0x207896BC9c47A105D5A6D01C53b5F036263950bf` | [Etherscan](https://sepolia.etherscan.io/address/0x207896BC9c47A105D5A6D01C53b5F036263950bf#code) |
+| AssetVotes | `0x35bCc99bE269cDcD1c2161308425b3a7C90095A9` | [Etherscan](https://sepolia.etherscan.io/address/0x35bCc99bE269cDcD1c2161308425b3a7C90095A9#code) |
+| OmniGovernor | `0x1BB6c9469bdE84Bee3925d365255b47F0f0c5d38` | [Etherscan](https://sepolia.etherscan.io/address/0x1BB6c9469bdE84Bee3925d365255b47F0f0c5d38#code) |
 
 Las direcciones también están en [`deployments/11155111.json`](deployments/11155111.json).
 
@@ -269,7 +269,7 @@ Hacer los pasos 6 a 10 **mientras corre la votación**: el voto solo se acepta m
 
 **Si el activo se registró con otra cantidad de fracciones** (el registro no se puede editar), escalar los números: con **100 fracciones**, A compra **50**, B compra **30** y el depósito es de **80 USDT** (+50 / +30 al retirar). La gobernanza da lo mismo: 50 a favor contra 30 en contra es 62,5%, menos que 2/3.
 
-**Tarifas:** cada inversor tiene solo 0,01 ETH. Antes de confirmar en MetaMask, mirar la tarifa estimada. Si alguna supera ~0,002 ETH, usar *Editar tarifa* → **Baja**, o mandarle más ETH desde SepoliaC.
+**Tarifas:** cada inversor tiene solo 0,01 ETH. El frontend le pasa a MetaMask tarifas calculadas con el bloque actual (2 × base fee + propina mínima), así que MetaMask debería mostrar *Sitio sugerido*. Si muestra *Mercado* y una tarifa que supera ~0,002 ETH, usar *Editar tarifa* → **Sitio sugerido** (o **Baja**), o mandarle más ETH desde SepoliaC.
 
 Qué muestra cada bloque:
 
@@ -282,10 +282,10 @@ Qué muestra cada bloque:
 
 ```powershell
 $r = "https://ethereum-sepolia-rpc.publicnode.com"
-$t = "0x6010Bc1953f0c158A66C7d2a2498149De7E5879C"
+$t = "0x207896BC9c47A105D5A6D01C53b5F036263950bf"
 
 # activo 1: creador, maxFractions, saleActive, precio, vendidas, legajo
-cast call $t "assets(uint256)(address,uint64,bool,uint128,uint64,bytes32)" 1 --rpc-url $r
+cast call $t "assets(uint256)(address,uint64,bool,uint128,uint64,bytes32,bytes32)" 1 --rpc-url $r
 ```
 
 Estados de una propuesta en el Governor (`state(proposalId)`): 0 Pendiente, 1 Activa, 3 Rechazada, 4 Aprobada, 7 Ejecutada.

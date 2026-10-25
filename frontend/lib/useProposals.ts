@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAccount, usePublicClient } from "wagmi";
 import { keccak256, toBytes, type Address, type Hash, type Hex } from "viem";
-import { abis, addresses, chain, ProposalState, START_BLOCK } from "./contracts";
+import { abis, chain, ProposalState, START_BLOCK } from "./contracts";
 
 export type Proposal = {
   id: bigint;
@@ -21,6 +21,8 @@ export type Proposal = {
   forVotes: bigint;
   abstain: bigint;
   quorum: bigint | undefined;
+  /** Fracciones emitidas en el snapshot (base de la participación). */
+  supply: bigint | undefined;
   /** Solo si hay una cuenta conectada. */
   hasVoted: boolean | undefined;
   /** Poder de voto de la cuenta conectada en el snapshot (undefined mientras está Pendiente). */
@@ -47,11 +49,10 @@ export async function getLogsChunked<T>(
   }
 }
 
-/** Propuestas del Governor (eventos ProposalCreated) con su estado y votos actuales. */
-export function useProposals() {
+/** Propuestas de `governor` (eventos ProposalCreated) con su estado y votos actuales. */
+export function useProposals(governor: Address | undefined) {
   const client = usePublicClient({ chainId: chain.id });
   const { address } = useAccount();
-  const governor = addresses.governor;
 
   return useQuery({
     queryKey: ["proposals", governor, address],
@@ -71,7 +72,10 @@ export function useProposals() {
         START_BLOCK,
         latest,
       );
-      const clock = await client.readContract({ address: governor, abi: abis.governor, functionName: "clock" });
+      const [clock, votes] = await Promise.all([
+        client.readContract({ address: governor, abi: abis.governor, functionName: "clock" }),
+        client.readContract({ address: governor, abi: abis.governor, functionName: "token" }),
+      ]);
 
       const proposals = await Promise.all(
         logs.map(async (log): Promise<Proposal> => {
@@ -80,10 +84,18 @@ export function useProposals() {
           const read = { address: governor, abi: abis.governor } as const;
           const started = voteStart! < BigInt(clock);
 
-          const [state, votes, quorum, hasVoted, votingPower] = await Promise.all([
+          const [state, tally, quorum, supply, hasVoted, votingPower] = await Promise.all([
             client.readContract({ ...read, functionName: "state", args: [id] }),
             client.readContract({ ...read, functionName: "proposalVotes", args: [id] }),
             started ? client.readContract({ ...read, functionName: "quorum", args: [voteStart!] }) : undefined,
+            started
+              ? client.readContract({
+                  address: votes,
+                  abi: abis.votes,
+                  functionName: "getPastTotalSupply",
+                  args: [voteStart!],
+                })
+              : undefined,
             address ? client.readContract({ ...read, functionName: "hasVoted", args: [id, address] }) : undefined,
             address && started
               ? client.readContract({ ...read, functionName: "getVotes", args: [address, voteStart!] })
@@ -102,10 +114,11 @@ export function useProposals() {
             deadline: voteEnd!,
             txHash: log.transactionHash,
             state,
-            against: votes[0],
-            forVotes: votes[1],
-            abstain: votes[2],
+            against: tally[0],
+            forVotes: tally[1],
+            abstain: tally[2],
             quorum,
+            supply,
             hasVoted,
             votingPower,
           };

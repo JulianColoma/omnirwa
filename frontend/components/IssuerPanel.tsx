@@ -1,114 +1,46 @@
 "use client";
 
 import { useState } from "react";
-import { useAccount, useReadContract, useWriteContract } from "wagmi";
-import { keccak256, parseUnits, toBytes } from "viem";
-import { abis, addresses, ASSET_ID, USDT_DECIMALS } from "@/lib/contracts";
-import { formatInt, formatUsdt } from "@/lib/format";
-import { useAsset, useCanWrite, useIsIssuer, usePosition } from "@/lib/useAsset";
+import { useAccount, useWriteContract } from "wagmi";
+import { abis, addresses } from "@/lib/contracts";
+import { formatInt, formatUsdt, parseUsdt } from "@/lib/format";
+import { useAsset, useCanWrite, usePosition, useRoles } from "@/lib/useAsset";
 import { useTx } from "@/lib/useTx";
+import { SetupGovernance } from "./CreateAsset";
 import { TxStatus } from "./TxStatus";
 
-const MAX_UINT64 = 2n ** 64n - 1n;
-const MAX_UINT128 = 2n ** 128n - 1n;
-
-function parseUsdt(value: string): bigint | undefined {
-  if (!/^\d+([.,]\d{0,6})?$/.test(value)) return undefined;
-  const amount = parseUnits(value.replace(",", "."), USDT_DECIMALS);
-  return amount > 0n ? amount : undefined;
-}
-
-/** Herramientas del emisor: registrar el activo (ISSUER_ROLE) y depositar dividendos (creador). */
+/** Herramientas del emisor: el admin arma la junta (si falta) y el creador del activo deposita la renta. */
 export function IssuerPanel() {
   const { address } = useAccount();
-  const { asset } = useAsset();
-  const isIssuer = useIsIssuer();
+  const { asset, governorStatus } = useAsset();
+  const { isAdmin } = useRoles();
 
-  if (asset === null && isIssuer) return <RegisterAsset />;
-  if (asset && address && asset.creator.toLowerCase() === address.toLowerCase()) return <DepositDividends />;
-  return null;
-}
-
-function RegisterAsset() {
-  const { canWrite, gate } = useCanWrite();
-  const { writeContractAsync } = useWriteContract();
-  const tx = useTx();
-  const [fractions, setFractions] = useState("1000");
-  const [price, setPrice] = useState("10");
-  const [doc, setDoc] = useState("");
-
-  const { data: nextId } = useReadContract({
-    address: addresses.tokenizer,
-    abi: abis.tokenizer,
-    functionName: "nextAssetId",
-    query: { enabled: Boolean(addresses.tokenizer) },
-  });
-
-  const maxFractions = /^\d+$/.test(fractions) ? BigInt(fractions) : 0n;
-  const pricePerFraction = parseUsdt(price) ?? 0n;
-  const valid = maxFractions > 0n && maxFractions <= MAX_UINT64 && pricePerFraction > 0n && pricePerFraction <= MAX_UINT128;
-  const wrongId = nextId !== undefined && nextId !== ASSET_ID;
-
-  const register = () =>
-    tx.run((step) =>
-      step("registro del activo", () =>
-        writeContractAsync({
-          address: addresses.tokenizer!,
-          abi: abis.tokenizer,
-          functionName: "registerAsset",
-          args: [maxFractions, pricePerFraction, keccak256(toBytes(doc.trim()))],
-        }),
-      ),
-    );
+  if (!asset || !address) return null;
+  const isCreator = asset.creator.toLowerCase() === address.toLowerCase();
+  const canSetup = Boolean(isAdmin) && governorStatus === "none";
 
   return (
-    <section className="panel panel-wide">
-      <h2>Registrar activo</h2>
-      <p className="hint">Tu cuenta tiene el rol de emisor. El activo se registra con la venta abierta.</p>
-      <div className="fields">
-        <label className="field">
-          <span>Fracciones</span>
-          <input inputMode="numeric" value={fractions} onChange={(e) => setFractions(e.target.value.replace(/\D/g, ""))} />
-        </label>
-        <label className="field">
-          <span>Precio por fracción (USDT)</span>
-          <input inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} />
-        </label>
-        <label className="field field-grow">
-          <span>Referencia del legajo</span>
-          <input placeholder="ipfs://…" value={doc} onChange={(e) => setDoc(e.target.value)} />
-        </label>
-      </div>
-      {valid && (
+    <div className="section">
+      {canSetup && <SetupGovernance />}
+      {isCreator && governorStatus === "none" && !isAdmin && (
         <p className="hint">
-          {formatInt(maxFractions)} fracciones a {formatUsdt(pricePerFraction)} USDT · objetivo{" "}
-          {formatUsdt(maxFractions * pricePerFraction)} USDT. On-chain se guarda solo el hash del legajo.
+          Este activo todavía no tiene junta. La despliega y vincula el administrador (<code>DEFAULT_ADMIN_ROLE</code>).
         </p>
       )}
-      {wrongId && (
-        <p className="hint status-error">
-          El próximo id libre es {nextId.toString()}, pero esta interfaz está configurada para el activo #
-          {ASSET_ID.toString()}.
-        </p>
-      )}
-      <button className="button" disabled={!canWrite || !valid || !doc.trim() || wrongId || tx.busy} onClick={register}>
-        Registrar
-      </button>
-      {gate && <p className="hint">{gate}</p>}
-      <TxStatus state={tx.state} />
-    </section>
+      {isCreator && <DepositDividends />}
+    </div>
   );
 }
 
 function DepositDividends() {
-  const { asset } = useAsset();
+  const { asset, assetId } = useAsset();
   const { usdtBalance, allowance } = usePosition();
   const { canWrite, gate } = useCanWrite();
   const { writeContractAsync } = useWriteContract();
   const tx = useTx();
   const [input, setInput] = useState("");
 
-  if (!asset) return null;
+  if (!asset || assetId === undefined) return null;
 
   const amount = parseUsdt(input);
   const supply = asset.soldFractions;
@@ -123,8 +55,9 @@ function DepositDividends() {
     amount !== undefined &&
     tx.run(async (step) => {
       if (needsApproval) {
-        await step("aprobación de USDT", () =>
+        await step("aprobación de USDT", (fees) =>
           writeContractAsync({
+            ...fees,
             address: addresses.usdt!,
             abi: abis.usdt,
             functionName: "approve",
@@ -132,20 +65,21 @@ function DepositDividends() {
           }),
         );
       }
-      await step("depósito de dividendos", () =>
+      await step("depósito de la renta", (fees) =>
         writeContractAsync({
+          ...fees,
           address: addresses.tokenizer!,
           abi: abis.tokenizer,
           functionName: "depositDividends",
-          args: [ASSET_ID, amount],
+          args: [assetId, amount],
         }),
       );
       setInput("");
     });
 
   return (
-    <section className="panel panel-wide">
-      <h2>Depositar dividendos</h2>
+    <section className="orwa-card">
+      <h2 className="card-title">Depositar renta</h2>
       <p className="hint">
         Sos el emisor de este activo. Lo que deposites se reparte entre las {formatInt(supply)} fracciones emitidas
         hoy; cada titular lo retira cuando quiere.
@@ -167,11 +101,11 @@ function DepositDividends() {
         </div>
       </div>
       <button
-        className="button"
+        className="orwa-btn orwa-btn--secondary"
         disabled={!canWrite || amount === undefined || Boolean(problem) || tx.busy}
         onClick={deposit}
       >
-        {needsApproval ? "Aprobar y depositar" : "Depositar"}
+        {needsApproval ? "Aprobar y depositar renta" : "Depositar renta"}
       </button>
       {problem && <p className="hint">{problem}</p>}
       {gate && <p className="hint">{gate}</p>}

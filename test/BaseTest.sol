@@ -16,6 +16,7 @@ abstract contract BaseTest is Test {
     uint64 internal constant MAX_FRACTIONS = 1_000;
     uint128 internal constant PRICE = 10e6; // 10 USDT
     bytes32 internal constant DOC_HASH = keccak256("ipfs://depto-rosario");
+    bytes32 internal constant NAME = "Depto Rosario";
     uint256 internal constant INITIAL_USDT = 100_000e6;
 
     MockUSDT internal usdt;
@@ -40,7 +41,7 @@ abstract contract BaseTest is Test {
 
     function _register() internal returns (uint256 id) {
         vm.prank(creator);
-        id = tokenizer.registerAsset(MAX_FRACTIONS, PRICE, DOC_HASH);
+        id = tokenizer.registerAsset(MAX_FRACTIONS, PRICE, DOC_HASH, NAME);
     }
 
     function _buy(address who, uint256 id, uint64 amount) internal {

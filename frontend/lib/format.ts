@@ -1,4 +1,4 @@
-import { formatUnits } from "viem";
+import { formatUnits, parseUnits } from "viem";
 import { USDT_DECIMALS } from "./contracts";
 
 const integer = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 0 });
@@ -11,6 +11,13 @@ export function formatInt(value: bigint | number): string {
 /** Monto de USDT (6 decimales) con hasta 2 decimales visibles. */
 export function formatUsdt(value: bigint): string {
   return money.format(Number(formatUnits(value, USDT_DECIMALS)));
+}
+
+/** Monto de USDT escrito por el usuario (hasta 6 decimales, coma o punto); undefined si no es válido o es 0. */
+export function parseUsdt(value: string): bigint | undefined {
+  if (!/^\d+([.,]\d{0,6})?$/.test(value)) return undefined;
+  const amount = parseUnits(value.replace(",", "."), USDT_DECIMALS);
+  return amount > 0n ? amount : undefined;
 }
 
 export function shortAddress(address: string): string {

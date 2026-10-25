@@ -35,13 +35,14 @@ contract RWATokenizer1155 is ERC1155Supply, AccessControl, Pausable, ReentrancyG
     // ─────────────────────────────── Tipos ───────────────────────────────
 
     /// @notice Datos de un activo tokenizado.
-    /// @dev Empaquetado en 3 slots para ahorrar gas.
+    /// @dev Empaquetado en 4 slots para ahorrar gas.
     /// @param creator Emisor del activo; recibe el pago de las compras y deposita dividendos.
     /// @param maxFractions Cantidad máxima de fracciones a vender.
     /// @param saleActive Si la venta está abierta.
     /// @param pricePerFraction Precio de una fracción en unidades de `paymentToken` (6 decimales).
     /// @param soldFractions Fracciones vendidas hasta ahora (== totalSupply(id)).
     /// @param docHash Hash del legajo legal / metadata en IPFS.
+    /// @param name Nombre corto del activo (UTF-8, hasta 32 bytes, completado con ceros a la derecha).
     struct Asset {
         address creator; //        20 bytes ┐
         uint64 maxFractions; //     8 bytes ├ slot 0
@@ -49,6 +50,7 @@ contract RWATokenizer1155 is ERC1155Supply, AccessControl, Pausable, ReentrancyG
         uint128 pricePerFraction; // 16 bytes ┐ slot 1
         uint64 soldFractions; //    8 bytes ┘
         bytes32 docHash; //        slot 2
+        bytes32 name; //           slot 3
     }
 
     // ─────────────────────────────── Constantes ───────────────────────────────
@@ -92,8 +94,14 @@ contract RWATokenizer1155 is ERC1155Supply, AccessControl, Pausable, ReentrancyG
     /// @param maxFractions Fracciones totales a la venta.
     /// @param pricePerFraction Precio por fracción.
     /// @param docHash Hash del legajo en IPFS.
+    /// @param name Nombre corto del activo.
     event AssetRegistered(
-        uint256 indexed id, address indexed creator, uint64 maxFractions, uint128 pricePerFraction, bytes32 docHash
+        uint256 indexed id,
+        address indexed creator,
+        uint64 maxFractions,
+        uint128 pricePerFraction,
+        bytes32 docHash,
+        bytes32 name
     );
     /// @notice Un inversor compró fracciones.
     /// @param id Id del activo.
@@ -133,6 +141,8 @@ contract RWATokenizer1155 is ERC1155Supply, AccessControl, Pausable, ReentrancyG
     error SaleNotActive(uint256 id);
     /// @notice La cantidad o el monto es cero.
     error ZeroAmount();
+    /// @notice Se intentó registrar un activo sin nombre.
+    error EmptyName();
     /// @notice Se pidieron más fracciones de las disponibles.
     /// @param id Id del activo.
     /// @param available Fracciones que quedan a la venta.
@@ -191,13 +201,15 @@ contract RWATokenizer1155 is ERC1155Supply, AccessControl, Pausable, ReentrancyG
     /// @param maxFractions Fracciones totales a la venta (> 0).
     /// @param pricePerFraction Precio por fracción en `paymentToken` (> 0).
     /// @param docHash Hash del legajo legal en IPFS.
+    /// @param name Nombre corto del activo (UTF-8, hasta 32 bytes; distinto de cero).
     /// @return id Id asignado al activo.
-    function registerAsset(uint64 maxFractions, uint128 pricePerFraction, bytes32 docHash)
+    function registerAsset(uint64 maxFractions, uint128 pricePerFraction, bytes32 docHash, bytes32 name)
         external
         onlyRole(ISSUER_ROLE)
         returns (uint256 id)
     {
         if (maxFractions == 0 || pricePerFraction == 0) revert ZeroAmount();
+        if (name == bytes32(0)) revert EmptyName();
         id = nextAssetId;
         // seguro: haría falta registrar 2^256 activos para desbordar
         unchecked {
@@ -209,9 +221,10 @@ contract RWATokenizer1155 is ERC1155Supply, AccessControl, Pausable, ReentrancyG
             saleActive: true,
             pricePerFraction: pricePerFraction,
             soldFractions: 0,
-            docHash: docHash
+            docHash: docHash,
+            name: name
         });
-        emit AssetRegistered(id, msg.sender, maxFractions, pricePerFraction, docHash);
+        emit AssetRegistered(id, msg.sender, maxFractions, pricePerFraction, docHash, name);
     }
 
     /// @notice Compra `amount` fracciones del activo `id` pagando con `paymentToken`.

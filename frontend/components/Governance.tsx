@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useBlock, useWriteContract } from "wagmi";
-import { decodeFunctionData, encodeFunctionData, keccak256, toBytes } from "viem";
+import { decodeFunctionData, encodeFunctionData, keccak256, toBytes, type Address } from "viem";
 import {
   abis,
   addresses,
-  ASSET_ID,
+  addressUrl,
   chain,
   PROPOSAL_STATES,
   ProposalState,
@@ -14,11 +14,12 @@ import {
   VoteType,
 } from "@/lib/contracts";
 import { describeError } from "@/lib/errors";
-import { formatInt, formatRemaining, percent, shortAddress, shortHash } from "@/lib/format";
+import { formatInt, formatRemaining, shortAddress } from "@/lib/format";
 import { useAsset, useCanWrite, usePosition } from "@/lib/useAsset";
 import { useProposals, type Proposal } from "@/lib/useProposals";
 import { useTx } from "@/lib/useTx";
 import { TxStatus } from "./TxStatus";
+import { AddressChip, Badge, VoteTally, type BadgeTone } from "./ui";
 
 /**
  * Hora de la cadena que avanza cada segundo, para las cuentas regresivas. Se ancla al timestamp del último
@@ -40,34 +41,51 @@ function useChainNow() {
 
 /** Junta de inversores: reglas, propuestas existentes y formulario para crear una nueva. */
 export function Governance() {
-  const { asset, votingPeriod, governorLinked } = useAsset();
-  const { data: proposals, isLoading, error } = useProposals();
+  const { assetId, asset, governor, linkedGovernor, governorStatus, votingPeriod } = useAsset();
+  const { data: proposals, isLoading, error } = useProposals(governor);
 
-  if (!asset) return null;
+  if (!asset || assetId === undefined) return null;
+
+  if (!governor) {
+    return (
+      <section className="section">
+        <div className="section-head">
+          <h2>Junta de inversores</h2>
+          {governorStatus === "none" && (
+            <p className="hint">
+              Este activo todavía no tiene junta. La despliega y vincula el administrador de la plataforma.
+            </p>
+          )}
+          {governorStatus === "invalid" && (
+            <p className="hint status-error">
+              La dirección vinculada como junta ({linkedGovernor && shortAddress(linkedGovernor)}) no es un OmniGovernor
+              de este activo: sus propuestas no se muestran.
+            </p>
+          )}
+          {governorStatus === "checking" && <p className="hint">Verificando la junta…</p>}
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="section">
       <div className="section-head">
         <h2>Junta de inversores</h2>
         <p className="hint">
-          Cada fracción es un voto, medido en el momento en que se crea la propuesta. Para aprobarse necesita quórum
-          del 20% del supply y dos tercios de los votos a favor
-          {votingPeriod !== undefined && <> · la votación dura {formatRemaining(Number(votingPeriod))}</>}.
+          Cada fracción es un voto, medido cuando se crea la propuesta. Se aprueba con 2/3 a favor y al menos 20 % de
+          participación
+          {votingPeriod !== undefined && <>. La votación dura {formatRemaining(Number(votingPeriod))}</>}.
         </p>
-        {governorLinked === false && (
-          <p className="hint status-error">
-            Este Governor no está vinculado al activo: las propuestas no podrán ejecutarse sobre el tokenizer.
-          </p>
-        )}
       </div>
 
-      <NewProposal saleActive={asset.saleActive} />
+      <NewProposal assetId={assetId} governor={governor} saleActive={asset.saleActive} />
 
       {error && <p className="status status-error">No se pudieron leer las propuestas: {describeError(error)}</p>}
       {isLoading && <p className="hint">Buscando propuestas…</p>}
       {proposals && proposals.length === 0 && <p className="empty">Todavía no hay propuestas.</p>}
       <ol className="proposals">
-        {proposals?.map((p) => <ProposalItem key={p.id.toString()} proposal={p} />)}
+        {proposals?.map((p) => <ProposalItem key={p.id.toString()} governor={governor} proposal={p} />)}
       </ol>
     </section>
   );
@@ -80,14 +98,21 @@ function describeAction(p: Proposal): string {
   try {
     const call = decodeFunctionData({ abi: abis.tokenizer, data: p.calldatas[0] });
     if (call.functionName === "setSaleActive") return call.args[1] ? "Abrir la venta" : "Cerrar la venta";
-    if (call.functionName === "recordResolution") return `Registrar la resolución ${shortHash(call.args[1])}`;
+    if (call.functionName === "recordResolution") return `Registrar la resolución ${shortAddress(call.args[1])}`;
     return call.functionName;
   } catch {
     return "Llamada al tokenizer";
   }
 }
 
-function ProposalItem({ proposal: p }: { proposal: Proposal }) {
+const STATE_TONES: Record<number, BadgeTone> = {
+  [ProposalState.Active]: "warning",
+  [ProposalState.Succeeded]: "positive",
+  [ProposalState.Executed]: "positive",
+  [ProposalState.Defeated]: "danger",
+};
+
+function ProposalItem({ governor, proposal: p }: { governor: Address; proposal: Proposal }) {
   const now = useChainNow();
   const { canWrite, gate } = useCanWrite();
   const { writeContractAsync } = useWriteContract();
@@ -95,18 +120,17 @@ function ProposalItem({ proposal: p }: { proposal: Proposal }) {
 
   const [title, ...rest] = p.description.split("\n");
   const body = rest.join("\n").trim();
-  const cast = p.forVotes + p.against;
-  const participation = p.forVotes + p.abstain;
   const remaining = Number(p.deadline) - now;
   const active = p.state === ProposalState.Active;
   const canVote = active && p.hasVoted === false && (p.votingPower ?? 0n) > 0n;
-  const createdUrl = txUrl(p.txHash);
+  const closing = active ? (remaining > 0 ? `Cierra en ${formatRemaining(remaining)}` : "Cerrando…") : undefined;
 
   const vote = (support: number, label: string) =>
     tx.run((step) =>
-      step(`voto ${label}`, () =>
+      step(`voto ${label}`, (fees) =>
         writeContractAsync({
-          address: addresses.governor!,
+          ...fees,
+          address: governor,
           abi: abis.governor,
           functionName: "castVote",
           args: [p.id, support],
@@ -116,9 +140,10 @@ function ProposalItem({ proposal: p }: { proposal: Proposal }) {
 
   const execute = () =>
     tx.run((step) =>
-      step("ejecución de la propuesta", () =>
+      step("ejecución de la propuesta", (fees) =>
         writeContractAsync({
-          address: addresses.governor!,
+          ...fees,
+          address: governor,
           abi: abis.governor,
           functionName: "execute",
           args: [p.targets, p.values, p.calldatas, p.descriptionHash],
@@ -127,41 +152,27 @@ function ProposalItem({ proposal: p }: { proposal: Proposal }) {
     );
 
   return (
-    <li className="proposal">
+    <li className="orwa-card">
       <div className="proposal-head">
-        <h3>{title}</h3>
-        <span className={`tag tag-state-${p.state}`}>{PROPOSAL_STATES[p.state] ?? "Desconocido"}</span>
+        <div>
+          <h3 className="orwa-card__title">{title}</h3>
+          <p className="meta">
+            {describeAction(p)} · propone <AddressChip value={p.proposer} href={addressUrl(p.proposer)} />
+            <AddressChip value={p.txHash} href={txUrl(p.txHash)} label="tx" />
+          </p>
+        </div>
+        <Badge tone={STATE_TONES[p.state] ?? "plain"}>{PROPOSAL_STATES[p.state] ?? "Desconocido"}</Badge>
       </div>
       {body && <p className="proposal-body">{body}</p>}
-      <p className="meta">
-        {describeAction(p)} · propuesta por <span className="mono">{shortAddress(p.proposer)}</span>
-        {createdUrl && (
-          <>
-            {" "}
-            ·{" "}
-            <a href={createdUrl} target="_blank" rel="noreferrer">
-              ver tx
-            </a>
-          </>
-        )}
-        {active && remaining > 0 && <> · cierra en {formatRemaining(remaining)}</>}
-        {active && remaining <= 0 && <> · cerrando…</>}
-      </p>
 
-      <div className="votes">
-        <VoteRow label="A favor" value={p.forVotes} total={cast + p.abstain} />
-        <VoteRow label="En contra" value={p.against} total={cast + p.abstain} />
-        <VoteRow label="Abstención" value={p.abstain} total={cast + p.abstain} />
-      </div>
-      <p className="meta">
-        Mayoría: {percent(p.forVotes, cast)}% a favor de {formatInt(cast)} votos (necesita 66,7%)
-        {p.quorum !== undefined && (
-          <>
-            {" "}
-            · quórum {formatInt(participation)} / {formatInt(p.quorum)}
-          </>
-        )}
-      </p>
+      <VoteTally
+        forVotes={p.forVotes}
+        against={p.against}
+        abstain={p.abstain}
+        quorum={p.quorum}
+        supply={p.supply}
+        closing={closing}
+      />
 
       {active && (
         <div className="actions">
@@ -172,17 +183,30 @@ function ProposalItem({ proposal: p }: { proposal: Proposal }) {
           ) : (
             <>
               <span className="hint">
-                Tu voto pesa {p.votingPower !== undefined ? formatInt(p.votingPower) : "—"} fracciones
+                Tu voto pesa{" "}
+                <span className="num">{p.votingPower !== undefined ? formatInt(p.votingPower) : "—"}</span> fracciones
               </span>
               <div className="button-row">
-                <button className="button-small" disabled={!canWrite || !canVote || tx.busy} onClick={() => vote(VoteType.For, "a favor")}>
-                  A favor
+                <button
+                  className="orwa-btn orwa-btn--secondary orwa-btn--sm"
+                  disabled={!canWrite || !canVote || tx.busy}
+                  onClick={() => vote(VoteType.For, "a favor")}
+                >
+                  Votar a favor
                 </button>
-                <button className="button-small button-ghost" disabled={!canWrite || !canVote || tx.busy} onClick={() => vote(VoteType.Against, "en contra")}>
-                  En contra
+                <button
+                  className="orwa-btn orwa-btn--secondary orwa-btn--sm"
+                  disabled={!canWrite || !canVote || tx.busy}
+                  onClick={() => vote(VoteType.Against, "en contra")}
+                >
+                  Votar en contra
                 </button>
-                <button className="button-small button-ghost" disabled={!canWrite || !canVote || tx.busy} onClick={() => vote(VoteType.Abstain, "abstención")}>
-                  Abstención
+                <button
+                  className="orwa-btn orwa-btn--ghost orwa-btn--sm"
+                  disabled={!canWrite || !canVote || tx.busy}
+                  onClick={() => vote(VoteType.Abstain, "abstención")}
+                >
+                  Abstenerme
                 </button>
               </div>
             </>
@@ -193,8 +217,8 @@ function ProposalItem({ proposal: p }: { proposal: Proposal }) {
       {p.state === ProposalState.Succeeded && (
         <div className="actions">
           <span className="hint">Aprobada. Cualquiera puede ejecutarla.</span>
-          <button className="button-small" disabled={!canWrite || tx.busy} onClick={execute}>
-            Ejecutar
+          <button className="orwa-btn orwa-btn--secondary orwa-btn--sm" disabled={!canWrite || tx.busy} onClick={execute}>
+            Ejecutar propuesta
           </button>
         </div>
       )}
@@ -205,22 +229,9 @@ function ProposalItem({ proposal: p }: { proposal: Proposal }) {
   );
 }
 
-function VoteRow({ label, value, total }: { label: string; value: bigint; total: bigint }) {
-  const width = total === 0n ? 0 : Number((value * 1000n) / total) / 10;
-  return (
-    <div className="vote-row">
-      <span>{label}</span>
-      <div className="vote-track">
-        <div className="vote-fill" style={{ width: `${width}%` }} />
-      </div>
-      <span className="num">{formatInt(value)}</span>
-    </div>
-  );
-}
-
 type Kind = "sale" | "resolution";
 
-function NewProposal({ saleActive }: { saleActive: boolean }) {
+function NewProposal({ assetId, governor, saleActive }: { assetId: bigint; governor: Address; saleActive: boolean }) {
   const { fractions } = usePosition();
   const { canWrite, gate } = useCanWrite();
   const { writeContractAsync } = useWriteContract();
@@ -236,8 +247,8 @@ function NewProposal({ saleActive }: { saleActive: boolean }) {
 
   if (!open) {
     return (
-      <div className="new-proposal-toggle">
-        <button className="button-small button-ghost" onClick={() => setOpen(true)}>
+      <div>
+        <button className="orwa-btn orwa-btn--secondary" onClick={() => setOpen(true)}>
           Nueva propuesta
         </button>
       </div>
@@ -248,16 +259,17 @@ function NewProposal({ saleActive }: { saleActive: boolean }) {
     tx.run(async (step) => {
       const calldata =
         kind === "sale"
-          ? encodeFunctionData({ abi: abis.tokenizer, functionName: "setSaleActive", args: [ASSET_ID, !saleActive] })
+          ? encodeFunctionData({ abi: abis.tokenizer, functionName: "setSaleActive", args: [assetId, !saleActive] })
           : encodeFunctionData({
               abi: abis.tokenizer,
               functionName: "recordResolution",
-              args: [ASSET_ID, keccak256(toBytes(text.trim()))],
+              args: [assetId, keccak256(toBytes(text.trim()))],
             });
       const description = kind === "resolution" ? `${title.trim()}\n${text.trim()}` : title.trim();
-      await step("creación de la propuesta", () =>
+      await step("creación de la propuesta", (fees) =>
         writeContractAsync({
-          address: addresses.governor!,
+          ...fees,
+          address: governor,
           abi: abis.governor,
           functionName: "propose",
           args: [[addresses.tokenizer!], [0n], [calldata], description],
@@ -268,7 +280,8 @@ function NewProposal({ saleActive }: { saleActive: boolean }) {
     });
 
   return (
-    <div className="new-proposal">
+    <div className="orwa-card">
+      <h3 className="orwa-card__title">Nueva propuesta</h3>
       <div className="segmented" role="radiogroup">
         <button role="radio" aria-checked={kind === "sale"} className={kind === "sale" ? "active" : ""} onClick={() => setKind("sale")}>
           {saleLabel}
@@ -284,13 +297,13 @@ function NewProposal({ saleActive }: { saleActive: boolean }) {
       </div>
       <p className="hint">
         {kind === "sale"
-          ? `Si se aprueba, el Governor llama a setSaleActive(${ASSET_ID}, ${!saleActive}) en el tokenizer.`
+          ? `Si se aprueba, la junta llama a setSaleActive(${assetId}, ${!saleActive}) en el tokenizer.`
           : "Para decisiones que se ejecutan fuera de la cadena (vender el activo, contratar una obra). Si se aprueba, queda registrado on-chain el hash del texto."}
       </p>
       <label className="field">
         <span>Título</span>
         <input
-          placeholder={kind === "sale" ? `${saleLabel} del activo` : "Vender el departamento a 120.000 USDT"}
+          placeholder={kind === "sale" ? `${saleLabel} del activo` : "Vender el activo a 120.000 USDT"}
           value={title}
           onChange={(e) => setTitle(e.target.value.replace(/\n/g, " "))}
         />
@@ -302,10 +315,14 @@ function NewProposal({ saleActive }: { saleActive: boolean }) {
         </label>
       )}
       <div className="button-row">
-        <button className="button-small" disabled={!canWrite || !hasFractions || !valid || tx.busy} onClick={submit}>
+        <button
+          className="orwa-btn orwa-btn--secondary"
+          disabled={!canWrite || !hasFractions || !valid || tx.busy}
+          onClick={submit}
+        >
           Proponer
         </button>
-        <button className="link-button" onClick={() => setOpen(false)}>
+        <button className="orwa-btn orwa-btn--ghost" onClick={() => setOpen(false)}>
           Cancelar
         </button>
       </div>

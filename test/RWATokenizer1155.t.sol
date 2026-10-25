@@ -99,18 +99,20 @@ contract RWATokenizer1155Test is BaseTest {
 
     function test_RegisterAsset() public {
         vm.expectEmit(true, true, false, true);
-        emit RWATokenizer1155.AssetRegistered(1, creator, MAX_FRACTIONS, PRICE, DOC_HASH);
+        emit RWATokenizer1155.AssetRegistered(1, creator, MAX_FRACTIONS, PRICE, DOC_HASH, NAME);
         uint256 id = _register();
 
         assertEq(id, 1);
         assertEq(tokenizer.nextAssetId(), 2);
-        (address c, uint64 maxF, bool active, uint128 price, uint64 sold, bytes32 doc) = tokenizer.assets(id);
+        (address c, uint64 maxF, bool active, uint128 price, uint64 sold, bytes32 doc, bytes32 name) =
+            tokenizer.assets(id);
         assertEq(c, creator);
         assertEq(maxF, MAX_FRACTIONS);
         assertTrue(active);
         assertEq(price, PRICE);
         assertEq(sold, 0);
         assertEq(doc, DOC_HASH);
+        assertEq(name, NAME);
     }
 
     function test_RevertWhen_RegisterWithoutIssuerRole() public {
@@ -119,16 +121,22 @@ contract RWATokenizer1155Test is BaseTest {
         vm.expectRevert(
             abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, alice, issuerRole)
         );
-        tokenizer.registerAsset(MAX_FRACTIONS, PRICE, DOC_HASH);
+        tokenizer.registerAsset(MAX_FRACTIONS, PRICE, DOC_HASH, NAME);
     }
 
     function test_RevertWhen_RegisterZero() public {
         vm.startPrank(creator);
         vm.expectRevert(RWATokenizer1155.ZeroAmount.selector);
-        tokenizer.registerAsset(0, PRICE, DOC_HASH);
+        tokenizer.registerAsset(0, PRICE, DOC_HASH, NAME);
         vm.expectRevert(RWATokenizer1155.ZeroAmount.selector);
-        tokenizer.registerAsset(MAX_FRACTIONS, 0, DOC_HASH);
+        tokenizer.registerAsset(MAX_FRACTIONS, 0, DOC_HASH, NAME);
         vm.stopPrank();
+    }
+
+    function test_RevertWhen_RegisterWithoutName() public {
+        vm.prank(creator);
+        vm.expectRevert(RWATokenizer1155.EmptyName.selector);
+        tokenizer.registerAsset(MAX_FRACTIONS, PRICE, DOC_HASH, bytes32(0));
     }
 
     function test_BuyFractions() public {
@@ -143,7 +151,7 @@ contract RWATokenizer1155Test is BaseTest {
 
         assertEq(tokenizer.balanceOf(alice, id), 500);
         assertEq(tokenizer.totalSupply(id), 500);
-        (,,,, uint64 sold,) = tokenizer.assets(id);
+        (,,,, uint64 sold,,) = tokenizer.assets(id);
         assertEq(sold, 500);
         assertEq(usdt.balanceOf(alice), INITIAL_USDT - 500 * PRICE);
         assertEq(usdt.balanceOf(creator), INITIAL_USDT + 500 * PRICE);
