@@ -117,7 +117,7 @@ export function Landing() {
         </div>
         <div className="stats">
           <StatTile label="Mayoría" value="2/3" note="De los votos emitidos, a favor. Protege a la minoría." />
-          <StatTile label="Quórum" value="20" unit="%" note="De las fracciones tienen que participar." />
+          <StatTile label="Quórum" value="66" unit="%" note="De las fracciones tienen que participar." />
           <StatTile label="Snapshot" value="1" unit="fracción = 1 voto" note="Vale lo que tenías al crear la propuesta." />
         </div>
       </section>

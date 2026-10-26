@@ -2,6 +2,7 @@
 
 import type { TxState } from "@/lib/useTx";
 import { txUrl } from "@/lib/contracts";
+import { formatEth } from "@/lib/format";
 import { AddressChip } from "./ui";
 
 function TxLink({ hash }: { hash: string }) {
@@ -24,7 +25,7 @@ export function TxStatus({ state }: { state: TxState }) {
     case "success":
       return (
         <p className="status status-ok">
-          Listo: {state.label}. <TxLink hash={state.hash} />
+          Listo: {state.label}. Comisión: {formatEth(state.fee)} ETH. <TxLink hash={state.hash} />
         </p>
       );
     case "error":

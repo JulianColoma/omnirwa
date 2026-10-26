@@ -8,58 +8,58 @@ Summary
 Impact: Medium
 Confidence: Medium
  - [ ] ID-0
-[RWATokenizer1155._update(address,address,uint256[],uint256[])](contracts/RWATokenizer1155.sol#L371-L397) ignores return value by [_supplyHistory[id].push(now_,SafeCast.toUint208(totalSupply(id)))](contracts/RWATokenizer1155.sol#L392)
+[RWATokenizer1155._update(address,address,uint256[],uint256[])](https://github.com/JulianColoma/omnirwa/blob/b242d0f/contracts/RWATokenizer1155.sol#L384-L410) ignores return value by [_balanceHistory[id][to].push(now_,SafeCast.toUint208(balanceOf(to,id)))](https://github.com/JulianColoma/omnirwa/blob/b242d0f/contracts/RWATokenizer1155.sol#L404)
 
-contracts/RWATokenizer1155.sol#L371-L397
+https://github.com/JulianColoma/omnirwa/blob/b242d0f/contracts/RWATokenizer1155.sol#L384-L410
 
 
  - [ ] ID-1
-[RWATokenizer1155._update(address,address,uint256[],uint256[])](contracts/RWATokenizer1155.sol#L371-L397) ignores return value by [_balanceHistory[id][to].push(now_,SafeCast.toUint208(balanceOf(to,id)))](contracts/RWATokenizer1155.sol#L391)
+[RWATokenizer1155._update(address,address,uint256[],uint256[])](https://github.com/JulianColoma/omnirwa/blob/b242d0f/contracts/RWATokenizer1155.sol#L384-L410) ignores return value by [_supplyHistory[id].push(now_,SafeCast.toUint208(totalSupply(id)))](https://github.com/JulianColoma/omnirwa/blob/b242d0f/contracts/RWATokenizer1155.sol#L405)
 
-contracts/RWATokenizer1155.sol#L371-L397
+https://github.com/JulianColoma/omnirwa/blob/b242d0f/contracts/RWATokenizer1155.sol#L384-L410
 
 
  - [ ] ID-2
-[RWATokenizer1155._update(address,address,uint256[],uint256[])](contracts/RWATokenizer1155.sol#L371-L397) ignores return value by [_balanceHistory[id][from].push(now_,SafeCast.toUint208(balanceOf(from,id)))](contracts/RWATokenizer1155.sol#L390)
+[RWATokenizer1155._update(address,address,uint256[],uint256[])](https://github.com/JulianColoma/omnirwa/blob/b242d0f/contracts/RWATokenizer1155.sol#L384-L410) ignores return value by [_balanceHistory[id][from].push(now_,SafeCast.toUint208(balanceOf(from,id)))](https://github.com/JulianColoma/omnirwa/blob/b242d0f/contracts/RWATokenizer1155.sol#L403)
 
-contracts/RWATokenizer1155.sol#L371-L397
+https://github.com/JulianColoma/omnirwa/blob/b242d0f/contracts/RWATokenizer1155.sol#L384-L410
 
 
 ## timestamp
 Impact: Low
 Confidence: Medium
  - [ ] ID-3
-[RWATokenizer1155.balanceOfAt(address,uint256,uint48)](contracts/RWATokenizer1155.sol#L301-L304) uses timestamp for comparisons
+[RWATokenizer1155.balanceOfAt(address,uint256,uint48)](https://github.com/JulianColoma/omnirwa/blob/b242d0f/contracts/RWATokenizer1155.sol#L314-L317) uses timestamp for comparisons
 	Dangerous comparisons:
-	- [timepoint >= block.timestamp](contracts/RWATokenizer1155.sol#L302)
+	- [timepoint >= block.timestamp](https://github.com/JulianColoma/omnirwa/blob/b242d0f/contracts/RWATokenizer1155.sol#L315)
 
-contracts/RWATokenizer1155.sol#L301-L304
+https://github.com/JulianColoma/omnirwa/blob/b242d0f/contracts/RWATokenizer1155.sol#L314-L317
 
 
  - [ ] ID-4
-[RWATokenizer1155.totalSupplyAt(uint256,uint48)](contracts/RWATokenizer1155.sol#L307-L310) uses timestamp for comparisons
+[RWATokenizer1155.totalSupplyAt(uint256,uint48)](https://github.com/JulianColoma/omnirwa/blob/b242d0f/contracts/RWATokenizer1155.sol#L320-L323) uses timestamp for comparisons
 	Dangerous comparisons:
-	- [timepoint >= block.timestamp](contracts/RWATokenizer1155.sol#L308)
+	- [timepoint >= block.timestamp](https://github.com/JulianColoma/omnirwa/blob/b242d0f/contracts/RWATokenizer1155.sol#L321)
 
-contracts/RWATokenizer1155.sol#L307-L310
+https://github.com/JulianColoma/omnirwa/blob/b242d0f/contracts/RWATokenizer1155.sol#L320-L323
 
 
 ## naming-convention
 Impact: Informational
 Confidence: High
  - [ ] ID-5
-Function [AssetVotes.CLOCK_MODE()](contracts/governance/AssetVotes.sol#L52-L54) is not in mixedCase
+Function [AssetVotes.CLOCK_MODE()](https://github.com/JulianColoma/omnirwa/blob/b242d0f/contracts/governance/AssetVotes.sol#L52-L54) is not in mixedCase
 
-contracts/governance/AssetVotes.sol#L52-L54
+https://github.com/JulianColoma/omnirwa/blob/b242d0f/contracts/governance/AssetVotes.sol#L52-L54
 
 
 ## unimplemented-functions
 Impact: Informational
 Confidence: High
  - [ ] ID-6
-[RWATokenizer1155](contracts/RWATokenizer1155.sol#L31-L421) does not implement functions:
-	- [IRWATokenizer.balanceOf(address,uint256)](contracts/interfaces/IRWATokenizer.sol#L13)
+[RWATokenizer1155](https://github.com/JulianColoma/omnirwa/blob/b242d0f/contracts/RWATokenizer1155.sol#L31-L434) does not implement functions:
+	- [IRWATokenizer.balanceOf(address,uint256)](https://github.com/JulianColoma/omnirwa/blob/b242d0f/contracts/interfaces/IRWATokenizer.sol#L13)
 
-contracts/RWATokenizer1155.sol#L31-L421
+https://github.com/JulianColoma/omnirwa/blob/b242d0f/contracts/RWATokenizer1155.sol#L31-L434
 
 
