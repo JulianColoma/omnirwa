@@ -212,9 +212,11 @@ Los roles del deploy de [§10](#10-red-y-contratos-desplegados) quedaron asignad
 
 | Rol | Dirección |
 |---|---|
-| Creador (deployer, emisor) | `0x2b9613629EC05e382D578bbAb8D34835F04F3bbb` |
-| Inversor A | `0x4fd7728a667D564Fc4F81B942E862DB32e6cB4f4` |
-| Inversor B | `0xfE8357a84522E5268d11899D0855753ee05Adc8E` |
+| Creador (deployer, emisor) | [`0x2b9613629EC05e382D578bbAb8D34835F04F3bbb`](https://sepolia.etherscan.io/address/0x2b9613629EC05e382D578bbAb8D34835F04F3bbb) |
+| Inversor A | [`0x4fd7728a667D564Fc4F81B942E862DB32e6cB4f4`](https://sepolia.etherscan.io/address/0x4fd7728a667D564Fc4F81B942E862DB32e6cB4f4) |
+| Inversor B | [`0xfE8357a84522E5268d11899D0855753ee05Adc8E`](https://sepolia.etherscan.io/address/0xfE8357a84522E5268d11899D0855753ee05Adc8E) |
+
+Los activos 2 a 5 se registraron desde el frontend, cada uno con su propio Governor ([§10](#10-red-y-contratos-desplegados)), así que el guion de [§9.9](#99-guion-de-la-demo) se puede repetir registrando un activo nuevo.
 
 ### 9.2 Billeteras de prueba
 
@@ -457,16 +459,60 @@ En MetaMask: agregar la red `http://127.0.0.1:8545` (chainId 31337) e importar l
 
 Red: **Sepolia** (chainId `11155111`). Bloque inicial del deploy: `11988458`. Las direcciones también están en [`deployments/11155111.json`](deployments/11155111.json).
 
+### Contratos del deploy (script `Deploy.s.sol`)
+
 | Contrato | Dirección | Código verificado |
 |---|---|---|
 | MockUSDT | `0xa41686cC85a839d288bf35816FFC6E2d27DDc1e0` | [Etherscan](https://sepolia.etherscan.io/address/0xa41686cC85a839d288bf35816FFC6E2d27DDc1e0#code) |
 | RWATokenizer1155 | `0x207896BC9c47A105D5A6D01C53b5F036263950bf` | [Etherscan](https://sepolia.etherscan.io/address/0x207896BC9c47A105D5A6D01C53b5F036263950bf#code) |
-| AssetVotes | `0x35bCc99bE269cDcD1c2161308425b3a7C90095A9` | [Etherscan](https://sepolia.etherscan.io/address/0x35bCc99bE269cDcD1c2161308425b3a7C90095A9#code) |
-| OmniGovernor | `0x1BB6c9469bdE84Bee3925d365255b47F0f0c5d38` | [Etherscan](https://sepolia.etherscan.io/address/0x1BB6c9469bdE84Bee3925d365255b47F0f0c5d38#code) |
+| AssetVotes (activo 1) | `0x35bCc99bE269cDcD1c2161308425b3a7C90095A9` | [Etherscan](https://sepolia.etherscan.io/address/0x35bCc99bE269cDcD1c2161308425b3a7C90095A9#code) |
+| OmniGovernor (activo 1) | `0x1BB6c9469bdE84Bee3925d365255b47F0f0c5d38` | [Etherscan](https://sepolia.etherscan.io/address/0x1BB6c9469bdE84Bee3925d365255b47F0f0c5d38#code) |
+
+### Governors desplegados desde el frontend
+
+Al registrar un activo desde `/crear`, el frontend despliega su `AssetVotes` y su `OmniGovernor` y los vincula con `setAssetGovernor` ([CreateAsset.tsx](frontend/components/CreateAsset.tsx)). Etherscan los muestra como verificados por coincidencia de bytecode (*Similar Match*) con el `OmniGovernor` ya verificado, porque es el mismo código con otros argumentos de constructor.
+
+| Activo | Contrato | Dirección | Código verificado |
+|---|---|---|---|
+| 2 "Lote de Prueba" | OmniGovernor | `0xCb1C8aE5E6952c2ab4A2a60f244B29875eFf24b5` | [Etherscan](https://sepolia.etherscan.io/address/0xCb1C8aE5E6952c2ab4A2a60f244B29875eFf24b5#code) |
+| 2 "Lote de Prueba" | AssetVotes | `0x4340E257d02e0d789faf7Cb0d01f256A84634861` | [Etherscan](https://sepolia.etherscan.io/address/0x4340E257d02e0d789faf7Cb0d01f256A84634861#code) |
+| 5 "Lote de Soja de Prueba" | OmniGovernor | `0x7A48635B014Ae612fAd56a3182b4DD0A10890A75` | [Etherscan](https://sepolia.etherscan.io/address/0x7A48635B014Ae612fAd56a3182b4DD0A10890A75#code) |
+| 5 "Lote de Soja de Prueba" | AssetVotes | `0x5e075E27B68C14131B4C4C39583ce6D83adC6fdc` | [Etherscan](https://sepolia.etherscan.io/address/0x5e075E27B68C14131B4C4C39583ce6D83adC6fdc#code) |
+
+Cuenta del Creador / deployer: [`0x2b9613629EC05e382D578bbAb8D34835F04F3bbb`](https://sepolia.etherscan.io/address/0x2b9613629EC05e382D578bbAb8D34835F04F3bbb).
+
+### Deploy anterior (obsoleto)
+
+Primer deploy, hecho con la versión del tokenizer previa al nombre del activo on-chain (`bytes32 name`). Quedó reemplazado por el de arriba y **no corresponde al código actual del repo**; se lista solo porque sus contratos siguen verificados y el `OmniGovernor` es la referencia del *Similar Match*.
+
+| Contrato | Dirección | Código verificado |
+|---|---|---|
+| MockUSDT | `0x470d4dbeD74ADB07ddB913f6809d23F354c24f9B` | [Etherscan](https://sepolia.etherscan.io/address/0x470d4dbeD74ADB07ddB913f6809d23F354c24f9B#code) |
+| RWATokenizer1155 | `0x6010Bc1953f0c158A66C7d2a2498149De7E5879C` | [Etherscan](https://sepolia.etherscan.io/address/0x6010Bc1953f0c158A66C7d2a2498149De7E5879C#code) |
+| OmniGovernor | `0x95a0EDEf0f720aAd42e425C5d131751AA9045205` | [Etherscan](https://sepolia.etherscan.io/address/0x95a0EDEf0f720aAd42e425C5d131751AA9045205#code) |
 
 ## 11. Transacciones del flujo principal
 
-Transacciones reales en Sepolia sobre el deploy de [§10](#10-red-y-contratos-desplegados). Activo 1: **"Lote de SOja"** (nombre tal como quedó on-chain), 10 fracciones a 10 USDT.
+Transacciones reales en Sepolia sobre el deploy de [§10](#10-red-y-contratos-desplegados).
+
+### Activo 5 "Lote de Soja de Prueba": registro, compra y gobernanza ejecutada
+
+Registrado desde el frontend con 1.000 fracciones a 10 USDT. La propuesta para cerrar la venta se aprobó y el Governor la ejecutó on-chain: hoy el activo tiene la **venta cerrada** (`saleActive = false`).
+
+| Paso | Actor | Tx |
+|---|---|---|
+| Registrar el activo 5 (1.000 × 10 USDT) | Creador | [`0x327e2def…b3c6c1`](https://sepolia.etherscan.io/tx/0x327e2def60ad75b09ad51d2f5f6dfdc0d11f4c54a67a160e492ff9c4d6b3c6c1) |
+| `setAssetGovernor(5, 0x7A48…0A75)` | Creador | [`0x03bd2d71…9721c4`](https://sepolia.etherscan.io/tx/0x03bd2d7142ff94788e080062f7e3b4b0aa18ca12bd42e0597ab3cb029b9721c4) |
+| Compra de 12 fracciones (120 USDT) | Inversor A | [`0x960cb6a3…80cda6`](https://sepolia.etherscan.io/tx/0x960cb6a3091ff7439b7574ec5aad8b9be69cc7f4a82d7729507094dcd280cda6) |
+| Compra de 15 fracciones (150 USDT) | Inversor B | [`0x28289673…f7ffec`](https://sepolia.etherscan.io/tx/0x28289673041339e3d84e9bf92d9c0af364ae3d7d6ae70a307e63773a86f7ffec) |
+| Propuesta 1 "Cerrar el lote de Prueba" (`setSaleActive(5, false)`) | Inversor A | [`0xfe42393b…b96e0d`](https://sepolia.etherscan.io/tx/0xfe42393b4c9dc485c81ad76222851ac4e5809570df64ab1dde0de2dc8db96e0d) |
+| Voto a favor en la propuesta 1 (15 votos de 27, supera el quórum del 20%) | Inversor B | [`0x92234d0e…fdf2dd45`](https://sepolia.etherscan.io/tx/0x92234d0e5831a85eebeefa09d908b8c4be71d1abab0fc5478ebfeabdfef2dd45) |
+| Propuesta 2 "Votacion Fallida": sin votos, quedó **Rechazada** por falta de quórum | Inversor A | [`0xdcbb1247…3ca7f614`](https://sepolia.etherscan.io/tx/0xdcbb1247b676b75b92876cbd0e87bfc96ebe9495dc8380ce4142a8e03ca7f614) |
+| Ejecución de la propuesta 1: el Governor cierra la venta (`SaleStatusChanged(5, false)`) | Inversor A | [`0xd9e900b9…403612`](https://sepolia.etherscan.io/tx/0xd9e900b95f7795781c5dc28fff0621ea68fcf8aa96119a25dbfe6d6b71403612) |
+
+### Deploy y activo 1 "Lote de SOja": dividendos
+
+Activo registrado por script con 10 fracciones a 10 USDT (nombre tal como quedó on-chain).
 
 | Paso | Actor | Tx |
 |---|---|---|
@@ -484,7 +530,7 @@ Transacciones reales en Sepolia sobre el deploy de [§10](#10-red-y-contratos-de
 ## 12. Limitaciones conocidas del MVP
 
 - Se confía en el creador: vínculo legal con el activo y veracidad de las ganancias depositadas.
-- Un Governor por activo, desplegado a mano por script (sin factory).
+- Un Governor por activo: lo despliega el frontend al registrar el activo (3 transacciones firmadas por el admin), sin factory on-chain.
 - Sin delegación de votos y sin timelock.
 - El snapshot excluye lo comprado en el bloque de la propuesta, pero si la transacción del `propose` queda varios bloques pendiente en el mempool, una compra anterior a su inclusión sí vota (mitigación: enviarla con gas suficiente o por RPC privado).
 - Un tenedor mayoritario legítimo tiene peso real (mitigado con 2/3 + quórum + reparto pro-rata).
