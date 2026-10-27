@@ -26,3 +26,4 @@ frontend/next-env.d.ts
 slither-report.json
 deployments/31337.json
 frontend/tsconfig.tsbuildinfo
+broadcast/**/*.lock

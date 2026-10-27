@@ -3,6 +3,10 @@
 > Fraccionamiento de activos reales (RWA) con ERC-1155, dividendos *pull over push* y gobernanza on-chain con snapshot, quórum y mayoría calificada.
 > Proyecto Final — Blockchain / Web3 · Stack: **Solidity 0.8.24 · Foundry · OpenZeppelin v5.1 · Next.js + wagmi/viem** · Red: **Sepolia**.
 
+> **El frontend está desplegado en Vercel: <https://omnirwa-frontend.vercel.app/>**, conectado a los contratos verificados en Sepolia ([§10](#10-red-y-contratos-desplegados)). Para usarlo solo hace falta MetaMask en la red Sepolia ([§9.8](#98-conectar-metamask)). 
+
+Recomendamos probar en Local primero, sin Vercel, para mejorar la velocidad de aprobacion de Transacciones. Al estar en Vercel se obtienen mas warnings innecesarios por parte de Metamask.
+
 ---
 
 ## Índice
@@ -133,13 +137,22 @@ Patrón de **acumulador por fracción** (el de MasterChef / "dividend tokens"), 
 
 ## 6. Instalación y compilación
 
-Requisitos: [Foundry](https://book.getfoundry.sh/getting-started/installation), Node.js ≥ 24 (npm 11; con npm 10 `npm ci` rechaza el lockfile), (opcional) Python 3 para Slither.
+| Herramienta | Versión | Cómo verificar |
+|---|---|---|
+| [Foundry](https://book.getfoundry.sh/getting-started/installation) | **≥ 1.8** | `forge --version` |
+| Node.js | ≥ 24 (npm 11; con npm 10 `npm ci` rechaza el lockfile) | `node --version` |
+| Chrome o Edge + [MetaMask](https://metamask.io/download) | — | Ícono del zorro en la barra |
+| Cuenta de [Etherscan](https://etherscan.io/register) | — | Solo para deployar: API key de verificación |
+| Python 3 | — | Opcional, para Slither |
+
+> **Foundry 1.5 o anterior no sirve para Sepolia.** Desde el hardfork Glamsterdam (octubre 2026) crear contratos cuesta mucho más gas, y las versiones viejas lo estiman mal. En Windows, actualizar descargando `foundry_vX.Y.Z_win32_amd64.zip` de [las releases](https://github.com/foundry-rs/foundry/releases) y reemplazando los `.exe` de `%USERPROFILE%\.foundry\bin` (cerrar antes cualquier `anvil` o `cast` abierto).
 
 ```bash
 git clone --recurse-submodules https://github.com/JulianColoma/omnirwa.git
 cd omnirwa
 forge install          # si se clonó sin --recurse-submodules
 forge build
+cd frontend && npm install && npm run abis
 ```
 
 ## 7. Tests y coverage
@@ -189,34 +202,128 @@ No aparecen `reentrancy-*` (`nonReentrant` + CEI) ni `divide-before-multiply`. D
 
 ## 9. Uso: deploy, demo y frontend
 
-> Guía completa paso a paso (terminal, MetaMask, anvil, Sepolia y guion de la demo): **[DEMO.md](DEMO.md)**.
+La forma más rápida de probar el proyecto es el **frontend público en <https://omnirwa-frontend.vercel.app/>**, que ya apunta al deploy de [§10](#10-red-y-contratos-desplegados): basta con configurar MetaMask ([§9.8](#98-conectar-metamask)) y seguir el guion ([§9.9](#99-guion-de-la-demo)). El resto de la sección explica cómo hacer un deploy propio en Sepolia, correr el frontend localmente y ensayar en anvil.
 
-### Deploy en Sepolia
+Los comandos de Sepolia son para **PowerShell** (Windows) y se corren desde la raíz del repo salvo que se indique otra carpeta.
 
-```bash
-cp .env.example .env                       # completar RPC, API key y direcciones de la demo
-cast wallet import deployer --interactive  # keystore cifrado: nunca private keys en .env
-source .env
-forge script script/Deploy.s.sol --rpc-url sepolia --account deployer --broadcast --verify
+### 9.1 Cuentas del deploy actual
+
+Los roles del deploy de [§10](#10-red-y-contratos-desplegados) quedaron asignados a estas cuentas, así que la demo completa (registrar, depositar dividendos, comprar con el USDT de prueba minteado) solo se puede hacer con ellas. Con otras billeteras hay que hacer un deploy propio (9.2 a 9.6).
+
+| Rol | Dirección |
+|---|---|
+| Creador (deployer, emisor) | [`0x2b9613629EC05e382D578bbAb8D34835F04F3bbb`](https://sepolia.etherscan.io/address/0x2b9613629EC05e382D578bbAb8D34835F04F3bbb) |
+| Inversor A | [`0x4fd7728a667D564Fc4F81B942E862DB32e6cB4f4`](https://sepolia.etherscan.io/address/0x4fd7728a667D564Fc4F81B942E862DB32e6cB4f4) |
+| Inversor B | [`0xfE8357a84522E5268d11899D0855753ee05Adc8E`](https://sepolia.etherscan.io/address/0xfE8357a84522E5268d11899D0855753ee05Adc8E) |
+
+Los activos 2 a 5 se registraron desde el frontend, cada uno con su propio Governor ([§10](#10-red-y-contratos-desplegados)), así que el guion de [§9.9](#99-guion-de-la-demo) se puede repetir registrando un activo nuevo.
+
+### 9.2 Billeteras de prueba
+
+Hacen falta **3 cuentas**: Creador (también firma el deploy), Inversor A e Inversor B.
+
+> **No usar las cuentas de anvil** (`0x7099…`, `0x3C44…`, `0x90F7…`). Sus claves privadas son públicas y hay bots que se llevan en segundos cualquier ETH que reciban, también en Sepolia.
+>
+> **No usar billeteras con fondos reales**, ni cuentas creadas con *Agregar cuenta* sobre una frase semilla que tenga fondos: más adelante se importa la clave del Creador en un keystore.
+
+Generar 3 claves nuevas con Foundry (correr 3 veces; muestra `Address` y `Private key`):
+
+```powershell
+cast wallet new
 ```
 
-Las direcciones quedan en `deployments/11155111.json`.
+Importar cada una en MetaMask: nombre de la cuenta arriba a la izquierda → **Agregar billetera** → **Importar una cuenta** → pegar la clave. Renombrarlas (⋮ → *Editar nombre*) como **SepoliaC**, **SepoliaA** y **SepoliaB**. Al terminar, limpiar la terminal (`cls`): las claves no se guardan en ningún archivo del repo.
 
-### Demo por scripts
+### 9.3 ETH de Sepolia
 
-Cada paso lo firma su actor (`creator`, `investorA`, `investorB`, importados con `cast wallet import`). El guion completo está en la cabecera de [script/Demo.s.sol](script/Demo.s.sol); los votos se emiten por propuesta sin copiar el id (`voteCloseSale(uint8)`, `voteResolution(uint8)`) y `status()` imprime el estado del activo y de las dos propuestas.
+1. En el [faucet de Google Cloud](https://cloud.google.com/application/web3/faucet/ethereum/sepolia), pedir **0,05 ETH** para **SepoliaC**.
+2. Desde MetaMask, con la red **Sepolia** y la cuenta **SepoliaC** → **Enviar** → **0,01 ETH** a SepoliaA y **0,01 ETH** a SepoliaB.
 
-```bash
-forge script script/Demo.s.sol --sig "register()"            --rpc-url sepolia --account creator   --broadcast
-forge script script/Demo.s.sol --sig "buy(uint64)" 500       --rpc-url sepolia --account investorA --broadcast
-forge script script/Demo.s.sol --sig "proposeCloseSale()"    --rpc-url sepolia --account investorA --broadcast
-forge script script/Demo.s.sol --sig "voteCloseSale(uint8)" 1 --rpc-url sepolia --account investorA --broadcast
-forge script script/Demo.s.sol --sig "status()"              --rpc-url sepolia
+Para ver los saldos en MetaMask hay que elegir la red Sepolia (si no aparece: ☰ → *Configuración* → *Avanzado* → **Mostrar redes de prueba**). Referencia de costos: el deploy completo usó ~50 M de gas, **≈0,0025 ETH** a 0,05 gwei.
+
+```powershell
+cast balance <dirección> --ether --rpc-url https://ethereum-sepolia-rpc.publicnode.com
 ```
 
-### Frontend
+### 9.4 Variables de entorno y keystore
 
-Next.js 14 + wagmi v2 + viem. Una sola página con todo el flujo:
+```powershell
+copy .env.example .env
+```
+
+```dotenv
+SEPOLIA_RPC_URL=https://ethereum-sepolia-rpc.publicnode.com
+ETHERSCAN_API_KEY=<key de etherscan.io/myapikey>
+CREATOR_ADDRESS=<dirección de SepoliaC>
+INVESTOR_A_ADDRESS=<dirección de SepoliaA>
+INVESTOR_B_ADDRESS=<dirección de SepoliaB>
+TOKEN_URI=ipfs://omnirwa/{id}.json
+```
+
+`.env` está en `.gitignore`: **nunca** poner private keys ni frases semilla ahí. La clave del deployer va a un keystore cifrado, fuera del repo (`%USERPROFILE%\.foundry\keystores`):
+
+```powershell
+cast wallet import deployer --interactive   # pide la private key de SepoliaC y una contraseña
+cast wallet list                            # tiene que aparecer "deployer (Local)"
+```
+
+Simulación opcional (no firma nada; confirma que el `.env` se lee bien):
+
+```powershell
+forge script script/Deploy.s.sol --rpc-url sepolia --sender <dirección de SepoliaC>
+```
+
+Tiene que terminar en `SIMULATION COMPLETE`. El gas que estima **no es confiable en Sepolia** (ver 9.5), y escribe `deployments/11155111.json`: borrarlo después para no confundirlo con un deploy real.
+
+### 9.5 Deploy y verificación
+
+```powershell
+forge script script/Deploy.s.sol --rpc-url sepolia --account deployer --broadcast --verify --skip-simulation --slow
+```
+
+| Flag | Por qué |
+|---|---|
+| `--account deployer` | Firma con el keystore cifrado; ninguna clave pasa por la línea de comandos |
+| `--verify` | Publica el código en Etherscan (y Sourcify) |
+| `--skip-simulation` | El gas lo estima el nodo de Sepolia. La simulación local usa `evm_version = cancun` y subestima 5–7 veces la creación de contratos: sin este flag las creaciones fallan por falta de gas |
+| `--slow` | Manda cada transacción cuando la anterior ya está confirmada, así la estimación de la siguiente ve los contratos desplegados |
+
+El script ([script/Deploy.s.sol](script/Deploy.s.sol)) manda 8 transacciones: despliega `MockUSDT` y `RWATokenizer1155`, le da `ISSUER_ROLE` al Creador, mintea 10.000 USDT de prueba a cada inversor y despliega `AssetVotes` y `OmniGovernor` para el activo 1, vinculándolos al tokenizer. Tarda 2–3 minutos y termina con:
+
+```
+ONCHAIN EXECUTION COMPLETE & SUCCESSFUL.
+...
+All (4) contracts were verified!
+```
+
+Se generan `deployments/11155111.json` (direcciones + bloque inicial) y `broadcast/Deploy.s.sol/11155111/run-latest.json` (las transacciones). Si la verificación falla por un timeout de Etherscan, reintentar sin volver a deployar:
+
+```powershell
+forge script script/Deploy.s.sol --rpc-url sepolia --account deployer --resume --verify
+```
+
+### 9.6 Controles después del deploy
+
+```powershell
+$r = "https://ethereum-sepolia-rpc.publicnode.com"
+$d = Get-Content deployments/11155111.json -Raw | ConvertFrom-Json
+
+# el Creador tiene ISSUER_ROLE → true
+$role = cast call $d.RWATokenizer1155 "ISSUER_ROLE()(bytes32)" --rpc-url $r
+cast call $d.RWATokenizer1155 "hasRole(bytes32,address)(bool)" $role <dirección de SepoliaC> --rpc-url $r
+
+# cada inversor tiene 10.000 USDT → 10000000000
+cast call $d.MockUSDT "balanceOf(address)(uint256)" <dirección de SepoliaA> --rpc-url $r
+
+# el Governor del activo 1 es el desplegado → igual a $d.OmniGovernor
+cast call $d.RWATokenizer1155 "assetGovernor(uint256)(address)" 1 --rpc-url $r
+```
+
+Y abrir los 4 links `https://sepolia.etherscan.io/address/<dirección>#code`: la pestaña *Contract* tiene que mostrar el ✓ de verificado.
+
+### 9.7 Frontend
+
+Next.js 14 + wagmi v2 + viem. Desplegado en **<https://omnirwa-frontend.vercel.app/>**. Una sola página con todo el flujo:
 
 - **Activo:** avance de la venta, precio, recaudado, emisor y hash del legajo.
 - **Comprar:** calcula el costo, aprueba **el monto exacto** solo si el allowance no alcanza, espera el recibo y recién ahí compra.
@@ -227,20 +334,97 @@ Next.js 14 + wagmi v2 + viem. Una sola página con todo el flujo:
 
 Los reverts se decodifican con los custom errors de los contratos (`SaleNotActive`, `GovernorAlreadyCastVote`, etc.) y se muestran en castellano.
 
-```bash
+Para correrlo localmente contra Sepolia:
+
+```powershell
 forge build
 cd frontend
 npm install
 npm run abis                 # genera lib/abis/*.ts desde ../out
 npm run sync                 # copia direcciones y bloque inicial de ../deployments/11155111.json a .env.local
+```
+
+Agregar el RPC de lectura al final de `frontend/.env.local` (ver `frontend/.env.example`):
+
+```dotenv
+NEXT_PUBLIC_RPC_URL=https://ethereum-sepolia-rpc.publicnode.com
+```
+
+```powershell
 npm run dev                  # http://localhost:3000
 ```
 
-La lectura de eventos usa `eth_getLogs` desde el bloque del deploy; si el RPC limita el rango, el frontend lo parte en tramos automáticamente. Para Sepolia conviene configurar `NEXT_PUBLIC_RPC_URL` (ver `frontend/.env.example`).
+La lectura de eventos usa `eth_getLogs` desde el bloque del deploy; si el RPC limita el rango, el frontend lo parte en tramos automáticamente. Next.js lee `.env.local` solo al arrancar: cerrar cualquier `npm run dev` anterior antes de iniciar uno nuevo (si el puerto 3000 está ocupado, Next arranca en 3001).
 
-### Entorno local (anvil)
+### 9.8 Conectar MetaMask
 
-Para probar todo sin testnet. Las cuentas de anvil están desbloqueadas, así que no hace falta ninguna clave:
+1. Abrir <https://omnirwa-frontend.vercel.app/> (o la URL local que imprime `npm run dev`) en el Chrome/Edge donde está MetaMask. No funciona en el navegador integrado de VS Code.
+2. En MetaMask elegir la red **Sepolia** y la cuenta **SepoliaC**.
+3. **Conectar billetera** → marcar **SepoliaC, SepoliaA y SepoliaB** → **Conectar**.
+4. Comprobar: arriba a la derecha la dirección del Creador y, en el pie, "Contratos · Sepolia" con las direcciones de [§10](#10-red-y-contratos-desplegados).
+
+**Cambiar de actor:** cambiar de cuenta en MetaMask. Si la página muestra `Connector already connected`, recargar con **F5** y, si aparece, tocar *Conectar billetera*.
+
+### 9.9 Guion de la demo
+
+Números: activo "Depto Rosario", **1.000 fracciones a 10 USDT**. A compra 500, B compra 300. El creador reparte 800 USDT. Quórum 20%, mayoría 2/3, votación de **10 minutos reales**.
+
+| # | Cuenta | Acción en la página | Resultado esperado |
+|---|---|---|---|
+| 1 | SepoliaC | **Registrar activo**: `1000` fracciones, `10` USDT, legajo `ipfs://depto-rosario` → *Registrar* | "0 de 1.000 fracciones vendidas", **venta abierta** |
+| 2 | SepoliaA | *Comprar* → `500` → **Aprobar y comprar** (2 firmas: approve exacto + compra) | 500 fracciones, 5.000 USDT menos |
+| 3 | SepoliaB | *Comprar* → `300` → **Aprobar y comprar** | "800 de 1.000 vendidas" |
+| — | — | **Esperar ~15 s** | Las fracciones tienen que estar en un bloque anterior al de la propuesta |
+| 4 | SepoliaA | **Nueva propuesta** → "Cerrar la venta" → título `Cerrar la venta del Depto Rosario` → *Proponer* | Propuesta 1 creada |
+| 5 | SepoliaA | **Resolución** → título `Vender el Depto Rosario a 120.000 USDT` + texto → *Proponer* | Propuesta 2 creada |
+| — | — | Esperar el bloque siguiente (~12 s) y recargar | Ambas **Activas**, "Tu voto pesa 500 fracciones". **Empiezan los 10 minutos** |
+| 6 | SepoliaA | **A favor** en las dos | |
+| 7 | SepoliaB | **A favor** en la 1, **En contra** en la 2 | Propuesta 2: "62,5% a favor (necesita 66,7%)" |
+| 8 | SepoliaC | **Depositar dividendos** → `800` → *Aprobar y depositar* | "1 USDT por fracción" |
+| 9 | SepoliaA | **Retirar dividendos** | +500 USDT |
+| 10 | SepoliaB | **Retirar dividendos** | +300 USDT |
+| — | — | Esperar a que terminen los 10 minutos y recargar | Propuesta 1 **Aprobada**, propuesta 2 **Rechazada** |
+| 11 | Cualquiera | Propuesta 1 → **Ejecutar** | Propuesta 1 **Ejecutada**, activo con **venta cerrada** |
+| 12 | Cualquiera | Intentar comprar | Botón deshabilitado: "La venta está cerrada." |
+
+Hacer los pasos 6 a 10 **mientras corre la votación**: el voto solo se acepta mientras la propuesta está *Activa*. Si el activo se registró con otra cantidad de fracciones, escalar los números: con **100 fracciones**, A compra **50**, B compra **30** y el depósito es de **80 USDT**; la gobernanza da lo mismo (62,5% < 2/3).
+
+**Tarifas:** el frontend le pasa a MetaMask tarifas calculadas con el bloque actual (2 × base fee + propina mínima), así que MetaMask debería mostrar *Sitio sugerido*. Si muestra *Mercado* con una tarifa que supera ~0,002 ETH, usar *Editar tarifa* → **Sitio sugerido** (o **Baja**).
+
+Qué muestra cada bloque:
+
+- **1–3:** tokenización ERC-1155 y pago en stablecoin con `SafeERC20` (el USDT va directo al creador). El frontend aprueba el monto exacto, nunca un allowance infinito.
+- **4–7:** gobernanza con snapshot: el voto pesa las fracciones que se tenían al crear la propuesta. La propuesta 2 tiene mayoría simple pero no llega a 2/3: el inversor mayoritario no decide solo.
+- **8–10:** dividendos *pull* con acumulador por fracción: cada uno retira su parte cuando quiere.
+- **11–12:** el Governor ejecuta on-chain `setSaleActive(1, false)` sobre el tokenizer, la única acción que tiene permitida sobre su activo.
+
+Seguir el estado desde la terminal (opcional):
+
+```powershell
+$r = "https://ethereum-sepolia-rpc.publicnode.com"
+$t = "0x207896BC9c47A105D5A6D01C53b5F036263950bf"
+
+# activo 1: creador, maxFractions, saleActive, precio, vendidas, legajo, nombre
+cast call $t "assets(uint256)(address,uint64,bool,uint128,uint64,bytes32,bytes32)" 1 --rpc-url $r
+```
+
+Estados de una propuesta en el Governor (`state(proposalId)`): 0 Pendiente, 1 Activa, 3 Rechazada, 4 Aprobada, 7 Ejecutada.
+
+### 9.10 Demo por scripts
+
+Alternativa al frontend: cada paso lo firma su actor (`creator`, `investorA`, `investorB`, importados con `cast wallet import`). El guion completo está en la cabecera de [script/Demo.s.sol](script/Demo.s.sol); los votos se emiten por propuesta sin copiar el id (`voteCloseSale(uint8)`, `voteResolution(uint8)`) y `status()` imprime el estado del activo y de las dos propuestas.
+
+```bash
+forge script script/Demo.s.sol --sig "register()"            --rpc-url sepolia --account creator   --broadcast
+forge script script/Demo.s.sol --sig "buy(uint64)" 500       --rpc-url sepolia --account investorA --broadcast
+forge script script/Demo.s.sol --sig "proposeCloseSale()"    --rpc-url sepolia --account investorA --broadcast
+forge script script/Demo.s.sol --sig "voteCloseSale(uint8)" 1 --rpc-url sepolia --account investorA --broadcast
+forge script script/Demo.s.sol --sig "status()"              --rpc-url sepolia
+```
+
+### 9.11 Entorno local (anvil)
+
+Para ensayar sin testnet. Las cuentas de anvil están desbloqueadas, así que no hace falta ninguna clave:
 
 ```bash
 anvil                                            # terminal 1
@@ -254,20 +438,81 @@ cd frontend && npm run sync -- 31337 && npm run dev
 
 En MetaMask: agregar la red `http://127.0.0.1:8545` (chainId 31337) e importar las cuentas de anvil que se quieran usar. Para cerrar una votación sin esperar 10 minutos: `cast rpc evm_increaseTime 600 && cast rpc evm_mine`.
 
+### 9.12 Problemas frecuentes
+
+| Síntoma | Causa | Solución |
+|---|---|---|
+| El ETH del faucet no aparece en MetaMask | El filtro está en "Todas las redes predeterminadas" (solo mainnets) | Elegir la red **Sepolia** en *Inicio*; activar *Mostrar redes de prueba* si no aparece |
+| `vm.envAddress: environment variable "CREATOR_ADDRESS" not found` | Falta `.env`, no está guardado o se corrió fuera de la raíz del repo | Completar y guardar `.env` (9.4); correr desde `omnirwa/` |
+| `Mac Mismatch` / `Failed to decrypt keystore` | Contraseña del keystore incorrecta | Reintentar; no se ve mientras se escribe |
+| `Transaction Failure: 0x…` en las creaciones de contratos | La simulación local subestimó el gas | Usar `--skip-simulation --slow` y Foundry ≥ 1.8 (9.5). Borrar `deployments/11155111.json` y volver a deployar |
+| No se puede reemplazar `anvil.exe` / `cast.exe` al actualizar Foundry | Hay un `anvil` o `cast` corriendo | Cerrarlos, o renombrar el `.exe` en uso y copiar el nuevo |
+| `localhost:3000` se queda cargando | Sigue vivo un `npm run dev` viejo y el nuevo arrancó en 3001 | Cerrar el servidor viejo y usar la URL que imprime `npm run dev` |
+| Arriba a la derecha aparece `0x7099…` y no está el panel de registro | Está conectada una cuenta de anvil | *Salir* → en MetaMask conectar SepoliaC/A/B (9.8) |
+| `Connector already connected` al cambiar de cuenta | Estado viejo del conector en la página | **F5** y, si aparece, *Conectar billetera* |
+| "Para proponer necesitás al menos una fracción comprada antes de este bloque" | Se propuso en el mismo bloque de la compra | Esperar ~15 s y reintentar |
+| "No tenías fracciones cuando se creó esta propuesta" | La cuenta compró después de la propuesta (snapshot) | Comportamiento esperado |
+| No aparecen propuestas ni actividad | El RPC rechaza `eth_getLogs` | Revisar `NEXT_PUBLIC_RPC_URL` en `frontend/.env.local` y reiniciar `npm run dev` |
+| Falla `--verify` | `ETHERSCAN_API_KEY` vacía o timeout de Etherscan | Revisar `.env` y reintentar con `--resume --verify` |
+
 ## 10. Red y contratos desplegados
 
-Red: **Sepolia** (chainId 11155111).
+Red: **Sepolia** (chainId `11155111`). Bloque inicial del deploy: `11988458`. Las direcciones también están en [`deployments/11155111.json`](deployments/11155111.json).
+
+### Contratos del deploy (script `Deploy.s.sol`)
 
 | Contrato | Dirección | Código verificado |
 |---|---|---|
 | MockUSDT | `0xa41686cC85a839d288bf35816FFC6E2d27DDc1e0` | [Etherscan](https://sepolia.etherscan.io/address/0xa41686cC85a839d288bf35816FFC6E2d27DDc1e0#code) |
 | RWATokenizer1155 | `0x207896BC9c47A105D5A6D01C53b5F036263950bf` | [Etherscan](https://sepolia.etherscan.io/address/0x207896BC9c47A105D5A6D01C53b5F036263950bf#code) |
-| AssetVotes | `0x35bCc99bE269cDcD1c2161308425b3a7C90095A9` | [Etherscan](https://sepolia.etherscan.io/address/0x35bCc99bE269cDcD1c2161308425b3a7C90095A9#code) |
-| OmniGovernor | `0x1BB6c9469bdE84Bee3925d365255b47F0f0c5d38` | [Etherscan](https://sepolia.etherscan.io/address/0x1BB6c9469bdE84Bee3925d365255b47F0f0c5d38#code) |
+| AssetVotes (activo 1) | `0x35bCc99bE269cDcD1c2161308425b3a7C90095A9` | [Etherscan](https://sepolia.etherscan.io/address/0x35bCc99bE269cDcD1c2161308425b3a7C90095A9#code) |
+| OmniGovernor (activo 1) | `0x1BB6c9469bdE84Bee3925d365255b47F0f0c5d38` | [Etherscan](https://sepolia.etherscan.io/address/0x1BB6c9469bdE84Bee3925d365255b47F0f0c5d38#code) |
+
+### Governors desplegados desde el frontend
+
+Al registrar un activo desde `/crear`, el frontend despliega su `AssetVotes` y su `OmniGovernor` y los vincula con `setAssetGovernor` ([CreateAsset.tsx](frontend/components/CreateAsset.tsx)). Etherscan los muestra como verificados por coincidencia de bytecode (*Similar Match*) con el `OmniGovernor` ya verificado, porque es el mismo código con otros argumentos de constructor.
+
+| Activo | Contrato | Dirección | Código verificado |
+|---|---|---|---|
+| 2 "Lote de Prueba" | OmniGovernor | `0xCb1C8aE5E6952c2ab4A2a60f244B29875eFf24b5` | [Etherscan](https://sepolia.etherscan.io/address/0xCb1C8aE5E6952c2ab4A2a60f244B29875eFf24b5#code) |
+| 2 "Lote de Prueba" | AssetVotes | `0x4340E257d02e0d789faf7Cb0d01f256A84634861` | [Etherscan](https://sepolia.etherscan.io/address/0x4340E257d02e0d789faf7Cb0d01f256A84634861#code) |
+| 5 "Lote de Soja de Prueba" | OmniGovernor | `0x7A48635B014Ae612fAd56a3182b4DD0A10890A75` | [Etherscan](https://sepolia.etherscan.io/address/0x7A48635B014Ae612fAd56a3182b4DD0A10890A75#code) |
+| 5 "Lote de Soja de Prueba" | AssetVotes | `0x5e075E27B68C14131B4C4C39583ce6D83adC6fdc` | [Etherscan](https://sepolia.etherscan.io/address/0x5e075E27B68C14131B4C4C39583ce6D83adC6fdc#code) |
+
+Cuenta del Creador / deployer: [`0x2b9613629EC05e382D578bbAb8D34835F04F3bbb`](https://sepolia.etherscan.io/address/0x2b9613629EC05e382D578bbAb8D34835F04F3bbb).
+
+### Deploy anterior (obsoleto)
+
+Primer deploy, hecho con la versión del tokenizer previa al nombre del activo on-chain (`bytes32 name`). Quedó reemplazado por el de arriba y **no corresponde al código actual del repo**; se lista solo porque sus contratos siguen verificados y el `OmniGovernor` es la referencia del *Similar Match*.
+
+| Contrato | Dirección | Código verificado |
+|---|---|---|
+| MockUSDT | `0x470d4dbeD74ADB07ddB913f6809d23F354c24f9B` | [Etherscan](https://sepolia.etherscan.io/address/0x470d4dbeD74ADB07ddB913f6809d23F354c24f9B#code) |
+| RWATokenizer1155 | `0x6010Bc1953f0c158A66C7d2a2498149De7E5879C` | [Etherscan](https://sepolia.etherscan.io/address/0x6010Bc1953f0c158A66C7d2a2498149De7E5879C#code) |
+| OmniGovernor | `0x95a0EDEf0f720aAd42e425C5d131751AA9045205` | [Etherscan](https://sepolia.etherscan.io/address/0x95a0EDEf0f720aAd42e425C5d131751AA9045205#code) |
 
 ## 11. Transacciones del flujo principal
 
-Transacciones reales en Sepolia sobre el deploy de [§10](#10-red-y-contratos-desplegados). Activo 1: **"Lote de SOja"** (nombre tal como quedó on-chain), 10 fracciones a 10 USDT.
+Transacciones reales en Sepolia sobre el deploy de [§10](#10-red-y-contratos-desplegados).
+
+### Activo 5 "Lote de Soja de Prueba": registro, compra y gobernanza ejecutada
+
+Registrado desde el frontend con 1.000 fracciones a 10 USDT. La propuesta para cerrar la venta se aprobó y el Governor la ejecutó on-chain: hoy el activo tiene la **venta cerrada** (`saleActive = false`).
+
+| Paso | Actor | Tx |
+|---|---|---|
+| Registrar el activo 5 (1.000 × 10 USDT) | Creador | [`0x327e2def…b3c6c1`](https://sepolia.etherscan.io/tx/0x327e2def60ad75b09ad51d2f5f6dfdc0d11f4c54a67a160e492ff9c4d6b3c6c1) |
+| `setAssetGovernor(5, 0x7A48…0A75)` | Creador | [`0x03bd2d71…9721c4`](https://sepolia.etherscan.io/tx/0x03bd2d7142ff94788e080062f7e3b4b0aa18ca12bd42e0597ab3cb029b9721c4) |
+| Compra de 12 fracciones (120 USDT) | Inversor A | [`0x960cb6a3…80cda6`](https://sepolia.etherscan.io/tx/0x960cb6a3091ff7439b7574ec5aad8b9be69cc7f4a82d7729507094dcd280cda6) |
+| Compra de 15 fracciones (150 USDT) | Inversor B | [`0x28289673…f7ffec`](https://sepolia.etherscan.io/tx/0x28289673041339e3d84e9bf92d9c0af364ae3d7d6ae70a307e63773a86f7ffec) |
+| Propuesta 1 "Cerrar el lote de Prueba" (`setSaleActive(5, false)`) | Inversor A | [`0xfe42393b…b96e0d`](https://sepolia.etherscan.io/tx/0xfe42393b4c9dc485c81ad76222851ac4e5809570df64ab1dde0de2dc8db96e0d) |
+| Voto a favor en la propuesta 1 (15 votos de 27, supera el quórum del 20%) | Inversor B | [`0x92234d0e…fdf2dd45`](https://sepolia.etherscan.io/tx/0x92234d0e5831a85eebeefa09d908b8c4be71d1abab0fc5478ebfeabdfef2dd45) |
+| Propuesta 2 "Votacion Fallida": sin votos, quedó **Rechazada** por falta de quórum | Inversor A | [`0xdcbb1247…3ca7f614`](https://sepolia.etherscan.io/tx/0xdcbb1247b676b75b92876cbd0e87bfc96ebe9495dc8380ce4142a8e03ca7f614) |
+| Ejecución de la propuesta 1: el Governor cierra la venta (`SaleStatusChanged(5, false)`) | Inversor A | [`0xd9e900b9…403612`](https://sepolia.etherscan.io/tx/0xd9e900b95f7795781c5dc28fff0621ea68fcf8aa96119a25dbfe6d6b71403612) |
+
+### Deploy y activo 1 "Lote de SOja": dividendos
+
+Activo registrado por script con 10 fracciones a 10 USDT (nombre tal como quedó on-chain).
 
 | Paso | Actor | Tx |
 |---|---|---|
@@ -285,7 +530,7 @@ Transacciones reales en Sepolia sobre el deploy de [§10](#10-red-y-contratos-de
 ## 12. Limitaciones conocidas del MVP
 
 - Se confía en el creador: vínculo legal con el activo y veracidad de las ganancias depositadas.
-- Un Governor por activo, desplegado a mano por script (sin factory).
+- Un Governor por activo: lo despliega el frontend al registrar el activo (3 transacciones firmadas por el admin), sin factory on-chain.
 - Sin delegación de votos y sin timelock.
 - El snapshot excluye lo comprado en el bloque de la propuesta, pero si la transacción del `propose` queda varios bloques pendiente en el mempool, una compra anterior a su inclusión sí vota (mitigación: enviarla con gas suficiente o por RPC privado).
 - Un tenedor mayoritario legítimo tiene peso real (mitigado con 2/3 + quórum + reparto pro-rata).
